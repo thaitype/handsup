@@ -108,6 +108,7 @@ describe("reconnecting", () => {
     await b.wait(120_000);
     b.online();
     expect(b.sockets).toHaveLength(1);
+    expect(b.requests).toHaveLength(0);
   });
 
   it("closes the socket and goes quiet when the page leaves the room", async () => {

@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Navigate, useParams } from "react-router";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { BODY_MAX_CHARS, type QuestionView, type RemoveResult, type UpsertResult, type Visibility } from "../../shared/protocol.ts";
 import { api, ApiError } from "../api.ts";
+import type { RoomState } from "../room/connection.ts";
 import { useRoom } from "../room/use-room.ts";
 import { useSession } from "../session.tsx";
 
@@ -224,10 +225,32 @@ function Question({
   );
 }
 
+/** Spec 8.6: nothing while the socket is live. */
+function ConnectionStatus({ status, updatedAt }: Pick<RoomState, "status" | "updatedAt">) {
+  if (status === "live" || status === "connecting") return null;
+  return (
+    <Alert data-testid="connection" data-status={status}>
+      <AlertDescription>
+        {status === "fallback"
+          ? "โหมดสำรอง: อัปเดตประมาณทุก 30 วินาที รีเฟรชเพื่อดูทันที"
+          : "เชื่อมต่อไม่ได้ กำลังลองใหม่"}
+        {updatedAt !== null && (
+          <span data-testid="updated-at"> · อัปเดตล่าสุด {new Date(updatedAt).toLocaleTimeString()}</span>
+        )}
+      </AlertDescription>
+    </Alert>
+  );
+}
+
 function Room({ roomId }: { roomId: string }) {
-  const { me } = useSession();
-  const { room, questions, ended, applyWrite } = useRoom(roomId);
+  const { me, refresh } = useSession();
+  const { room, questions, status, updatedAt, ended, applyWrite } = useRoom(roomId);
   const isInstructor = me?.role === "instructor";
+
+  // The server says this session is over: ask who is signed in, which leads to sign-in.
+  useEffect(() => {
+    if (ended === "signed-out") void refresh();
+  }, [ended, refresh]);
 
   if (ended === "forbidden") {
     return (
@@ -245,6 +268,7 @@ function Room({ roomId }: { roomId: string }) {
           {room?.name ?? "Room"}
         </h1>
       </div>
+      <ConnectionStatus status={status} updatedAt={updatedAt} />
       {!room ? (
         <p className="text-muted-foreground">Loading…</p>
       ) : (
