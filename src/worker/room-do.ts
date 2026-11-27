@@ -1,9 +1,13 @@
 import { DurableObject } from "cloudflare:workers";
 import {
+  CLOSE_FORBIDDEN,
+  CLOSE_PROTOCOL,
+  CLOSE_RECONNECT,
   PROTOCOL_VERSION,
   ROOM_MAX_QUESTIONS,
   type QuestionView,
   type RoomInfo,
+  type ServerMessage,
   type SnapshotMessage,
   type Visibility,
 } from "../shared/protocol.ts";
@@ -20,7 +24,25 @@ type Failed = { ok: false; error: WriteError };
 export type UpsertOutcome = { ok: true; question: QuestionView } | Failed;
 export type RemoveOutcome = { ok: true; questionId: string } | Failed;
 
-type SocketAttachment = { validUntil: number };
+/** What the Worker verified before it handed a socket upgrade to the room. */
+export type Connection = {
+  identity: Identity;
+  room: RoomInfo;
+  sessionId: string;
+  sessionExpiresAt: number;
+  /** False for an instructor who is not also a member of the room. */
+  member: boolean;
+};
+export const CONNECTION_HEADER = "x-handsup-connection";
+
+/** Spec 8.1. No role: it is derived from the instructor list at every send. */
+type SocketAttachment = {
+  userId: string;
+  sessionId: string;
+  email: string;
+  member: boolean;
+  validUntil: number;
+};
 
 const failed = (error: WriteError): Failed => ({ ok: false, error });
 
@@ -80,6 +102,7 @@ export class RoomDO extends DurableObject<Env> {
       row.resolved_at,
       input.clientRequestId,
     );
+    this.#publish(row);
     return this.#view(viewer, row);
   }
 
@@ -108,6 +131,7 @@ export class RoomDO extends DurableObject<Env> {
         Date.now(),
         input.clientRequestId,
       );
+      this.#publish(question);
     }
     return this.#view(viewer, question);
   }
@@ -120,7 +144,9 @@ export class RoomDO extends DurableObject<Env> {
     // Resolving again keeps the first time.
     const resolvedAt = resolved ? (question.resolved_at ?? Date.now()) : null;
     this.ctx.storage.sql.exec("update question set resolved_at = ? where id = ?", resolvedAt, question.id);
-    return this.#view(viewer, { ...question, resolved_at: resolvedAt });
+    const changed = { ...question, resolved_at: resolvedAt };
+    this.#publish(changed);
+    return this.#view(viewer, changed);
   }
 
   deleteQuestion(identity: Identity, questionId: string): RemoveOutcome {
@@ -133,6 +159,12 @@ export class RoomDO extends DurableObject<Env> {
       this.ctx.storage.sql.exec("delete from answer where question_id = ?", question.id);
       this.ctx.storage.sql.exec("delete from question where id = ?", question.id);
     });
+    // Only those who could see it hear that it is gone (spec 6.2).
+    this.#emit((watcher) =>
+      canSee(watcher, question)
+        ? { v: PROTOCOL_VERSION, type: "question.remove", questionId: question.id }
+        : null,
+    );
     return { ok: true, questionId: question.id };
   }
 
@@ -147,6 +179,7 @@ export class RoomDO extends DurableObject<Env> {
       question.id,
     );
     if (rowsWritten === 0) return failed("not_found");
+    this.#publish(question);
     return this.#view(viewer, question);
   }
 
@@ -159,10 +192,49 @@ export class RoomDO extends DurableObject<Env> {
   }
 
   #view(viewer: Viewer, question: QuestionRow): UpsertOutcome {
-    const answers = this.ctx.storage.sql
-      .exec<AnswerRow>("select * from answer where question_id = ? order by created_at, rowid", question.id)
+    return { ok: true, question: project(viewer, question, this.#answers(question.id)) };
+  }
+
+  #answers(questionId: string): AnswerRow[] {
+    return this.ctx.storage.sql
+      .exec<AnswerRow>("select * from answer where question_id = ? order by created_at, rowid", questionId)
       .toArray();
-    return { ok: true, question: project(viewer, question, answers) };
+  }
+
+  /** Sends the question, as each watcher may see it, to those who may see it. */
+  #publish(question: QuestionRow): void {
+    let answers: AnswerRow[] | undefined;
+    this.#emit((watcher) => {
+      if (!canSee(watcher, question)) return null;
+      answers ??= this.#answers(question.id);
+      return { v: PROTOCOL_VERSION, type: "question.upsert", question: project(watcher, question, answers) };
+    });
+  }
+
+  /** Every event goes through here, to every socket of the room. */
+  #emit(message: (watcher: Viewer) => ServerMessage | null): void {
+    for (const socket of this.ctx.getWebSockets()) this.#send(socket, message);
+  }
+
+  /**
+   * The only place that writes to a socket. A socket with nothing to hear is left untouched,
+   * so that not even a close tells it that something happened. Otherwise its validity and the
+   * viewer's role are checked now (spec 8.1 and 8.4).
+   */
+  #send(socket: WebSocket, message: (watcher: Viewer) => ServerMessage | null): void {
+    if (socket.readyState !== WebSocket.READY_STATE_OPEN) return;
+    const attachment = socket.deserializeAttachment() as SocketAttachment;
+    const watcher = this.#viewer({ id: attachment.userId, name: "", email: attachment.email });
+    const outgoing = message(watcher);
+    if (!outgoing) return;
+    if (attachment.validUntil <= Date.now()) {
+      socket.close(CLOSE_RECONNECT, "expired");
+    } else if (watcher.role === "learner" && !attachment.member) {
+      // Admitted as an instructor, and no longer one.
+      socket.close(CLOSE_FORBIDDEN, "forbidden");
+    } else {
+      socket.send(JSON.stringify(outgoing));
+    }
   }
 
   /** Used by the HTTP snapshot and the socket connect alike. */
@@ -182,30 +254,35 @@ export class RoomDO extends DurableObject<Env> {
     return { v: PROTOCOL_VERSION, type: "snapshot", room: { id: room.id, name: room.name }, questions };
   }
 
+  /** The socket upgrade. Only the Worker can reach this, after checking who is asking. */
   override async fetch(request: Request): Promise<Response> {
-    if (request.headers.get("Upgrade") !== "websocket") {
+    const header = request.headers.get(CONNECTION_HEADER);
+    if (request.headers.get("Upgrade") !== "websocket" || !header) {
       return new Response("Expected a WebSocket upgrade", { status: 426 });
     }
+    const connection = JSON.parse(decodeURIComponent(header)) as Connection;
     const [client, server] = Object.values(new WebSocketPair()) as [WebSocket, WebSocket];
-    this.ctx.acceptWebSocket(server);
+
+    // Accept, query and send with nothing awaited in between, so every later event
+    // reaches this socket after the snapshot and none is lost (spec 8.1).
+    const { userId, sessionId } = { userId: connection.identity.id, sessionId: connection.sessionId };
+    this.ctx.acceptWebSocket(server, [`user:${userId}`, `session:${sessionId}`]);
     server.serializeAttachment({
-      validUntil: Date.now() + socketMaxLifetimeSeconds(this.env) * 1000,
+      userId,
+      sessionId,
+      email: connection.identity.email,
+      member: connection.member,
+      validUntil: Math.min(
+        connection.sessionExpiresAt,
+        Date.now() + socketMaxLifetimeSeconds(this.env) * 1000,
+      ),
     } satisfies SocketAttachment);
+    this.#send(server, (watcher) => this.#snapshotFor(watcher, connection.room));
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  /** Returns how many sockets received the message. Expired sockets are closed instead. */
-  broadcast(message: string): number {
-    let delivered = 0;
-    for (const socket of this.ctx.getWebSockets()) {
-      const { validUntil } = socket.deserializeAttachment() as SocketAttachment;
-      if (validUntil <= Date.now()) {
-        socket.close(4001, "expired");
-        continue;
-      }
-      socket.send(message);
-      delivered += 1;
-    }
-    return delivered;
+  /** The client only ever sends `ping`, which is answered without waking this object. */
+  override async webSocketMessage(socket: WebSocket): Promise<void> {
+    socket.close(CLOSE_PROTOCOL, "protocol");
   }
 }

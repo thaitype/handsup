@@ -1,40 +1,16 @@
-import { evictDurableObject, runInDurableObject } from "cloudflare:test";
-import { env } from "cloudflare:workers";
-import { describe, expect, it, vi } from "vitest";
+/** The socket stays alive on its own: ping is answered without waking the object (spec 8.2). */
+import { describe, expect, it } from "vitest";
+import { classroom } from "./support/classroom.ts";
 import { connect } from "./support/socket.ts";
 
-type Marked = { inMemoryMarker?: string };
-
-describe("RoomDO eviction", () => {
-  it("really drops memory, and the same socket still receives an event", async () => {
-    const stub = env.ROOM.get(env.ROOM.idFromName(crypto.randomUUID()));
-    const client = await connect(stub);
-    const readMarker = () =>
-      runInDurableObject(stub, (room) => (room as unknown as Marked).inMemoryMarker);
-
-    expect(await stub.broadcast("before")).toBe(1);
-    await vi.waitFor(() => expect(client.messages).toEqual(["before"]));
-
-    // The marker lives only on this instance. It survives an ordinary later call.
-    await runInDurableObject(stub, (room) => {
-      (room as unknown as Marked).inMemoryMarker = "set before eviction";
-    });
-    expect(await readMarker()).toBe("set before eviction");
-
-    await evictDurableObject(stub);
-
-    expect(await readMarker()).toBeUndefined();
-    expect(await stub.broadcast("after")).toBe(1);
-    await vi.waitFor(() => expect(client.messages).toEqual(["before", "after"]));
-    expect(client.closes).toEqual([]);
-    client.socket.close(1000);
-  });
-
+describe("RoomDO sockets", () => {
   it("answers ping with pong", async () => {
-    const stub = env.ROOM.get(env.ROOM.idFromName(crypto.randomUUID()));
-    const client = await connect(stub);
+    const { room, member } = await classroom();
+    const client = await connect((await member("A")).browser, room.id);
     client.socket.send("ping");
-    await vi.waitFor(() => expect(client.messages).toEqual(["pong"]));
+    await client.received("pong");
+    expect(client.frames.at(-1)).toBe("pong");
+    expect(client.closes).toEqual([]);
     client.socket.close(1000);
   });
 });

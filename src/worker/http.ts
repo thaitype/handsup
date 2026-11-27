@@ -26,12 +26,17 @@ export const writeGate: MiddlewareHandler<AppEnv> = async (c, next) => {
   return next();
 };
 
-/** The signed-in user with their role from INSTRUCTOR_EMAILS, or null. */
-export async function viewerOf(c: Context<AppEnv>): Promise<Viewer | null> {
+/** The signed-in user with their role from INSTRUCTOR_EMAILS, and their session, or null. */
+export async function sessionOf(c: Context<AppEnv>) {
   const session = await createAuth(c.env).api.getSession({ headers: c.req.raw.headers });
   if (!session) return null;
   const { id, name, email } = session.user;
-  return { id, name, email, role: roleOf(c.env, email) };
+  const viewer: Viewer = { id, name, email, role: roleOf(c.env, email) };
+  return { viewer, sessionId: session.session.id, expiresAt: session.session.expiresAt.getTime() };
+}
+
+export async function viewerOf(c: Context<AppEnv>): Promise<Viewer | null> {
+  return (await sessionOf(c))?.viewer ?? null;
 }
 
 /** Reads a JSON body against a strict schema. Anything else, unknown fields included, is null. */

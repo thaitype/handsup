@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it, vi } from "vitest";
 import { createAuth } from "../src/worker/auth.ts";
 import { resetLinkTtlSeconds, socketMaxLifetimeSeconds } from "../src/worker/config.ts";
+import { classroom, questionFrom, roomApi } from "./support/classroom.ts";
 import { connect } from "./support/socket.ts";
 
 describe("time limits when unset", () => {
@@ -12,11 +13,13 @@ describe("time limits when unset", () => {
   });
 
   it("keeps a socket valid past the short test lifetime", { timeout: 15_000 }, async () => {
-    const stub = env.ROOM.get(env.ROOM.idFromName(crypto.randomUUID()));
-    const client = await connect(stub);
+    const { room, member } = await classroom();
+    const a = await member("A");
+    const client = await connect(a.browser, room.id);
     await scheduler.wait(3_500);
-    expect(await stub.broadcast("still here")).toBe(1);
-    await vi.waitFor(() => expect(client.messages).toEqual(["still here"]));
+    await questionFrom(await roomApi(room.id).ask(a.browser, "still here"));
+    await client.received("still here");
+    expect(client.closes).toEqual([]);
     client.socket.close(1000);
   });
 });

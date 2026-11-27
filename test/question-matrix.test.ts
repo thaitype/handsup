@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { classroom, questionFrom, resetPostLimit, roomApi, snapshotFrom } from "./support/classroom.ts";
 import type { Browser } from "./support/http.ts";
+import { upgrade } from "./support/socket.ts";
 
 type Who = "guest" | "learner, not a member" | "other member" | "asker" | "instructor";
 const WHO: Who[] = ["guest", "learner, not a member", "other member", "asker", "instructor"];
@@ -53,6 +54,17 @@ describe("AC12: question actions by role (spec 6.1)", () => {
         run: (b) => sees(b, hidden),
       },
       {
+        name: "open the socket",
+        expected: { guest: 401, "learner, not a member": 404, "other member": 200, asker: 200, instructor: 200 },
+        run: async (b) => {
+          const response = await upgrade(b, room.id);
+          if (!response.webSocket) return response.status;
+          response.webSocket.accept();
+          response.webSocket.close(1000);
+          return 200;
+        },
+      },
+      {
         name: "ask",
         expected: { guest: 401, "learner, not a member": 404, "other member": 200, asker: 200, instructor: 403 },
         run: async (b) => (await api.ask(b, "new")).status,
@@ -99,6 +111,6 @@ describe("AC12: question actions by role (spec 6.1)", () => {
       }
     }
     console.log("COUNT AC12 question rows", JSON.stringify({ actions: rows.length, ...counts }));
-    expect(counts).toEqual({ allowed: 17, refused: 28 });
+    expect(counts).toEqual({ allowed: 20, refused: 30 });
   });
 });

@@ -23,9 +23,9 @@ export class Browser {
   }
 
   /** Any request, sent with this browser's cookies, origin and address. */
-  async request(path: string, init: RequestInit): Promise<Response> {
+  async request(path: string, init: RequestInit, origin: string | null = ORIGIN): Promise<Response> {
     const headers = new Headers(init.headers);
-    headers.set("origin", ORIGIN);
+    if (origin !== null) headers.set("origin", origin);
     headers.set("cf-connecting-ip", this.#address);
     if (this.#cookies.size > 0) {
       headers.set("cookie", [...this.#cookies].map(([k, v]) => `${k}=${v}`).join("; "));
@@ -42,6 +42,13 @@ export class Browser {
       else this.#cookies.delete(name);
     }
     return response;
+  }
+
+  /** A second holder of the same cookies, as a copied cookie would be. */
+  clone(): Browser {
+    const copy = new Browser(this.send);
+    for (const [name, value] of this.#cookies) copy.#cookies.set(name, value);
+    return copy;
   }
 
   signUp(email: string, name = "Test User", password = PASSWORD) {

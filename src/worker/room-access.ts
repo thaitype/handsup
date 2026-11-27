@@ -18,3 +18,11 @@ export async function roomFor(db: D1Database, viewer: Viewer, roomId: string): P
           .bind(roomId, viewer.id);
   return statement.first<RoomInfo>();
 }
+
+export async function isMember(db: D1Database, userId: string, roomId: string): Promise<boolean> {
+  const row = await db
+    .prepare("select 1 as found from room_member where room_id = ? and user_id = ?")
+    .bind(roomId, userId)
+    .first();
+  return row !== null;
+}

@@ -2,10 +2,11 @@
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { BODY_MAX_CHARS } from "../shared/protocol.ts";
-import { errorResponse, readBody, viewerOf, type AppEnv, type Viewer } from "./http.ts";
+import { requireVar } from "./config.ts";
+import { errorResponse, readBody, sessionOf, type AppEnv, type Viewer } from "./http.ts";
 import { takePostAttempt } from "./post-limit.ts";
-import { roomFor } from "./room-access.ts";
-import type { RemoveOutcome, UpsertOutcome, WriteError } from "./room-do.ts";
+import { isMember, roomFor } from "./room-access.ts";
+import { CONNECTION_HEADER, type Connection, type RemoveOutcome, type UpsertOutcome, type WriteError } from "./room-do.ts";
 
 const STATUS = { not_found: 404, forbidden: 403, room_full: 409 } as const satisfies Record<WriteError, number>;
 
@@ -24,15 +25,16 @@ const resolvedBody = z.strictObject({ resolved: z.boolean() });
  * role when the action belongs to one role (403, before any lookup), then the room (404).
  */
 async function enter(c: Context<AppEnv>, only?: Viewer["role"]) {
-  const viewer = await viewerOf(c);
-  if (!viewer) return { refused: errorResponse(c, 401, "unauthenticated") };
+  const session = await sessionOf(c);
+  if (!session) return { refused: errorResponse(c, 401, "unauthenticated") };
+  const { viewer } = session;
   if (only && viewer.role !== only) return { refused: errorResponse(c, 403, "forbidden") };
   const room = await roomFor(c.env.DB, viewer, c.req.param("id") ?? "");
   if (!room) return { refused: errorResponse(c, 404, "not_found") };
   // The room object is only ever named after a room that D1 says exists (spec 4 principle 3).
   const stub = c.env.ROOM.get(c.env.ROOM.idFromName(room.id));
   const identity = { id: viewer.id, name: viewer.name, email: viewer.email };
-  return { viewer, identity, room, stub };
+  return { viewer, session, identity, room, stub };
 }
 
 /** Counts a post against the user's limit, or answers 429. */
@@ -55,6 +57,35 @@ questions.get("/api/rooms/:id/snapshot", async (c) => {
   const entry = await enter(c);
   if (entry.refused) return entry.refused;
   return c.json(await entry.stub.snapshot(entry.identity, entry.room));
+});
+
+/** Spec 7.6: a browser sends Origin on every WebSocket upgrade, and it must be ours. */
+const fromOurOrigin = (c: Context<AppEnv>) =>
+  c.req.header("origin") === new URL(requireVar(c.env, "BETTER_AUTH_URL")).origin;
+
+questions.get("/api/rooms/:id/ws", async (c) => {
+  if (!fromOurOrigin(c)) return errorResponse(c, 403, "forbidden");
+  const entry = await enter(c);
+  if (entry.refused) return entry.refused;
+  if (c.req.header("upgrade")?.toLowerCase() !== "websocket") {
+    return c.json({ error: "upgrade_required" }, 426);
+  }
+  const { viewer, session, identity, room, stub } = entry;
+  const connection: Connection = {
+    identity,
+    room,
+    sessionId: session.sessionId,
+    sessionExpiresAt: session.expiresAt,
+    // A learner got this far only as a member.
+    member: viewer.role === "learner" || (await isMember(c.env.DB, viewer.id, room.id)),
+  };
+  // A new request: nothing the client sent is forwarded to the room object.
+  const upgraded = await stub.fetch("https://room/ws", {
+    headers: { Upgrade: "websocket", [CONNECTION_HEADER]: encodeURIComponent(JSON.stringify(connection)) },
+  });
+  if (!upgraded.webSocket) throw new Error(`room refused the upgrade: ${upgraded.status}`);
+  // Copied so that the shared middleware can add its headers.
+  return new Response(null, { status: 101, webSocket: upgraded.webSocket });
 });
 
 questions.post("/api/rooms/:id/questions", async (c) => {
