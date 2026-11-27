@@ -26,6 +26,12 @@ for (const source of sources) {
   }
 }
 
+// No variable may be baked into the deployable config: secrets and INSTRUCTOR_EMAILS are
+// passed at deploy time (spec 7.3), and an e2e build would carry test values (review round 9).
+const deployConfig = JSON.parse(read("wrangler.json"));
+const baked = Object.keys(deployConfig.vars ?? {});
+if (baked.length > 0) failures.push(`wrangler.json has baked vars: ${baked.join(", ")}`);
+
 console.log(`checked ${scripts.length} scripts, ${maps.length} source maps, ${sources.length} sources in ${root}`);
 if (failures.length > 0) {
   for (const failure of failures) console.error(`FAIL: ${failure}`);
