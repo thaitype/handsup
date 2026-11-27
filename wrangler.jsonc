@@ -16,6 +16,9 @@
       "migrations_dir": "migrations"
     }
   ],
+  // Production is served on its custom domain only (scripts/deploy.mjs passes it).
+  "workers_dev": false,
+  "preview_urls": false,
   "durable_objects": { "bindings": [{ "name": "ROOM", "class_name": "RoomDO" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RoomDO"] }]
   // No "vars" here on purpose. INSTRUCTOR_EMAILS is never committed (spec 7.3):

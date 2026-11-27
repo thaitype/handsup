@@ -122,6 +122,29 @@ Nothing in the app is switched off: the blocking happens inside that browser win
 when tracked files differed from that commit at build time. `pnpm build` fails if git cannot read
 the commit; under `pnpm dev` without git the commit is `"unknown"`.
 
+## Production
+
+Everything in this section except the dry run acts on your Cloudflare account. Run it from a clean
+checkout, after `pnpm install` and `wrangler login`. With more than one account, set
+`CLOUDFLARE_ACCOUNT_ID`.
+
+Put the settings in `~/handsup.secrets` (`chmod 600`), outside the repository, one `KEY=value` per
+line: `BETTER_AUTH_SECRET` (new, not your local one), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+and `HANDSUP_DOMAIN` (a bare host name in a zone on that account). In the Google OAuth client, add
+the redirect URI `https://<your domain>/api/auth/callback/google`.
+
+```sh
+node scripts/deploy.mjs deploy --dry-run --instructors ""   # no account: build, bindings, vars
+node scripts/deploy.mjs create-db                           # once
+node scripts/deploy.mjs migrate                             # remote D1 migrations
+node scripts/deploy.mjs deploy --instructors ""             # first deploy: nobody is an instructor
+```
+
+Instructors register on the deployed site first. Then deploy again with
+`--instructors "<email>,<email>"`. Every deploy needs the full list: it is not remembered. The
+script refuses a dirty tree, and refuses a domain that already has a DNS record but does not
+answer as handsup (`--replace-existing-dns` overrides that and overwrites the record).
+
 ## Known issues
 
 ### A reset link made before an email joins `INSTRUCTOR_EMAILS` still works afterwards

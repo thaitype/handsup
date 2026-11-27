@@ -73,6 +73,8 @@ export default defineConfig(async () => {
         project("node-env-test", ["test/**/*.node-env-test.test.ts"], { NODE_ENV: "test" }),
         // The browser's room connection, on plain Node with controlled time and a fake browser.
         { test: { name: "client", environment: "node", include: ["test/client/**/*.test.ts"] } },
+        // The production scripts, on plain Node. None of it runs wrangler or the network.
+        { test: { name: "scripts", environment: "node", include: ["test/scripts/**/*.test.mjs"] } },
       ],
     },
   };
