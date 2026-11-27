@@ -5,7 +5,7 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { takeJoinAttempt, JOIN_LIMIT, JOIN_WINDOW_MS } from "../src/worker/rooms.ts";
-import type { Browser } from "./support/http.ts";
+import { Browser, PASSWORD, uniqueEmail } from "./support/http.ts";
 import { people, roomIds, type Room } from "./support/people.ts";
 
 type Who = "guest" | "learner, not a member" | "member" | "instructor";
@@ -158,21 +158,45 @@ describe("request bodies (spec 8.5)", () => {
 });
 
 describe("the shared write gate", () => {
-  it("refuses a write that is not JSON, on app and auth routes alike", async () => {
+  const GATE = { error: "unsupported_media_type" };
+
+  it("refuses a write that is not JSON, with its own answer, on app and auth routes alike", async () => {
     const { instructor } = await people();
-    const send = (path: string, type: string | null) =>
-      instructor.request(path, {
+    const send = async (path: string, type: string | null, body = JSON.stringify({ name: "Gate" })) => {
+      const response = await instructor.request(path, {
         method: "POST",
         headers: type ? { "content-type": type } : {},
-        body: JSON.stringify({ name: "Gate" }),
+        body,
       });
-    expect((await send("/api/rooms", "text/plain")).status).toBe(415);
-    expect((await send("/api/rooms", "application/x-www-form-urlencoded")).status).toBe(415);
-    expect((await send("/api/rooms", null)).status).toBe(415);
-    expect((await send("/api/auth/sign-out", "text/plain")).status).toBe(415);
+      return [response.status, await response.json().catch(() => null)];
+    };
+    expect(await send("/api/rooms", "text/plain")).toEqual([415, GATE]);
+    expect(await send("/api/rooms", "application/x-www-form-urlencoded")).toEqual([415, GATE]);
+    expect(await send("/api/rooms", null)).toEqual([415, GATE]);
+    // Better Auth answers 415 for text/plain by itself, so the body shows the gate answered.
+    expect(await send("/api/auth/sign-out", "text/plain")).toEqual([415, GATE]);
     // Control: the same request as JSON goes through.
-    expect((await send("/api/rooms", "application/json")).status).toBe(200);
-    expect((await send("/api/rooms", "application/json; charset=utf-8")).status).toBe(200);
+    expect((await send("/api/rooms", "application/json"))[0]).toBe(200);
+    expect((await send("/api/rooms", "application/json; charset=utf-8"))[0]).toBe(200);
+  });
+
+  it("refuses a form-encoded sign-in that Better Auth alone would accept", async () => {
+    const { learner } = await people();
+    const email = uniqueEmail("form");
+    await (await learner("form-owner")).signUp(email);
+    const signIn = async (type: string, body: string) => {
+      const browser = new Browser();
+      const response = await browser.request("/api/auth/sign-in/email", {
+        method: "POST",
+        headers: { "content-type": type },
+        body,
+      });
+      return [response.status, await response.json().catch(() => null)];
+    };
+    const form = new URLSearchParams({ email, password: PASSWORD }).toString();
+    expect(await signIn("application/x-www-form-urlencoded", form)).toEqual([415, GATE]);
+    // Control: the same credentials as JSON sign in.
+    expect((await signIn("application/json", JSON.stringify({ email, password: PASSWORD })))[0]).toBe(200);
   });
 });
 
