@@ -1,5 +1,6 @@
 // Gate (spec 7.1): the built Worker must hash passwords with native node:crypto scrypt,
 // never the pure JavaScript fallback. Run after `pnpm build`.
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -32,9 +33,16 @@ const deployConfig = JSON.parse(read("wrangler.json"));
 const baked = Object.keys(deployConfig.vars ?? {});
 if (baked.length > 0) failures.push(`wrangler.json has baked vars: ${baked.join(", ")}`);
 
+// AC23: GET /api/version must name the commit this tree is at (run right after the build).
+const head = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+const carriesHead = new RegExp(`"commit":\\s*"${head}"`);
+if (!scripts.some((file) => carriesHead.test(read(file)))) {
+  failures.push(`no script carries the build commit ${head} for /api/version`);
+}
+
 console.log(`checked ${scripts.length} scripts, ${maps.length} source maps, ${sources.length} sources in ${root}`);
 if (failures.length > 0) {
   for (const failure of failures) console.error(`FAIL: ${failure}`);
   process.exit(1);
 }
-console.log("OK: native node:crypto scrypt only");
+console.log(`OK: native node:crypto scrypt only; built from ${head}`);
