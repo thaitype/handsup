@@ -47,6 +47,7 @@
     "test:e2e:app": "playwright test -c playwright.app.config.ts",
     "test:e2e:slow": "playwright test -c playwright.slow.config.ts",
     "check:bundle": "node scripts/check-bundle.mjs",
+    "gate": "node scripts/gate.mjs",
     "gen:auth-migration": "node scripts/gen-auth-migration.mjs",
     "db:migrate:local": "wrangler d1 migrations apply DB --local"
   }
