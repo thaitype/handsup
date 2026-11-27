@@ -1,5 +1,6 @@
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { authSecret, instructorEmails, requireVar, resetLinkTtlSeconds } from "./config.ts";
+import { hashPassword, verifyPassword } from "./password.ts";
 
 const AUTH_RATE_RULE = { window: 60, max: 60 };
 
@@ -26,6 +27,7 @@ export function authOptions(env: Env, database: BetterAuthOptions["database"] = 
       enabled: true,
       resetPasswordTokenExpiresIn: resetLinkTtlSeconds(env),
       revokeSessionsOnPasswordReset: true,
+      password: { hash: hashPassword, verify: verifyPassword },
     },
     socialProviders: {
       google: {

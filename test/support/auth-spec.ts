@@ -6,6 +6,7 @@ import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { authOptions, createAuth } from "../../src/worker/auth.ts";
+import { hashPassword, verifyPassword } from "../../src/worker/password.ts";
 import { countingD1 } from "./d1-counter.ts";
 
 const withVars = (vars: Record<string, string | undefined>) => ({ ...env, ...vars }) as Env;
@@ -32,6 +33,8 @@ export function describeSpecOptions() {
       expect(options.session?.cookieCache?.enabled).toBe(false);
       expect(context.sessionConfig.cookieRefreshCache).toBe(false);
       expect(options.advanced?.database?.validateSchema).toBe(false);
+      expect(context.password.hash).toBe(hashPassword);
+      expect(context.password.verify).toBe(verifyPassword);
       // Spec 7.2: linking stays at the library defaults.
       expect(options.account?.accountLinking?.trustedProviders).toBeUndefined();
       expect(options.account?.accountLinking?.requireLocalEmailVerified).toBeUndefined();

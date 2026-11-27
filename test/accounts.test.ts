@@ -44,7 +44,7 @@ describe("accounts through the real sign-up API", () => {
     expect((await right.me()).status).toBe(200);
   });
 
-  it("stores a salted scrypt hash, not the password", async () => {
+  it("stores a prefixed, salted scrypt hash, not the password", async () => {
     const email = uniqueEmail("hash");
     await new Browser().signUp(email);
     const row = await env.DB.prepare(
@@ -52,7 +52,7 @@ describe("accounts through the real sign-up API", () => {
     )
       .bind(email)
       .first<{ password: string }>();
-    expect(row?.password).toMatch(/^[0-9a-f]{32}:[0-9a-f]{128}$/);
+    expect(row?.password).toMatch(/^scrypt-n16384-r16-p1\$[0-9a-f]{32}:[0-9a-f]{128}$/);
   });
 });
 
