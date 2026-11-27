@@ -1,0 +1,58 @@
+import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { defineConfig } from "vitest/config";
+import { experimental_readRawConfig } from "wrangler";
+
+/** Test values only. Every app variable is set here so a developer's .dev.vars cannot leak in. */
+const baseVars = {
+  BETTER_AUTH_SECRET: "test-only-secret-0123456789-abcdefghijklmnop",
+  BETTER_AUTH_URL: "http://localhost:5173",
+  GOOGLE_CLIENT_ID: "test-google-client-id",
+  GOOGLE_CLIENT_SECRET: "test-google-client-secret",
+  INSTRUCTOR_EMAILS: " Teacher@Example.test , second.teacher@example.test",
+};
+
+const path = (relative: string) => fileURLToPath(new URL(relative, import.meta.url));
+
+/**
+ * Wrangler loads the .dev.vars that sits next to its config file, and a value there would
+ * stand in for a variable a test expects to be unset. So tests use a generated copy of
+ * wrangler.jsonc in a directory that has no .dev.vars.
+ */
+function isolatedWranglerConfig(): string {
+  const { rawConfig } = experimental_readRawConfig({ config: path("./wrangler.jsonc") });
+  const directory = path("./node_modules/.cache/handsup-test");
+  mkdirSync(directory, { recursive: true });
+  const target = `${directory}/wrangler.json`;
+  const { $schema: _, ...config } = rawConfig;
+  writeFileSync(target, JSON.stringify({ ...config, main: path(`./${config.main}`) }));
+  return target;
+}
+
+export default defineConfig(async () => {
+  const migrations = await readD1Migrations(path("./migrations"));
+  const testConfigPath = isolatedWranglerConfig();
+  const project = (name: string, include: string[], extraVars: Record<string, string> = {}) => ({
+    plugins: [
+      cloudflareTest({
+        wrangler: { configPath: testConfigPath },
+        miniflare: { bindings: { ...baseVars, ...extraVars, TEST_MIGRATIONS: migrations } },
+      }),
+    ],
+    test: { name, include, setupFiles: ["./test/support/apply-migrations.ts"] },
+  });
+
+  return {
+    test: {
+      projects: [
+        project("default", ["test/**/*.test.ts", "!test/**/*.short-ttl.test.ts"]),
+        // Time limits set to seconds, so expiry tests wait in real time (spec 7.0).
+        project("short-ttl", ["test/**/*.short-ttl.test.ts"], {
+          RESET_LINK_TTL_SECONDS: "3",
+          SOCKET_MAX_LIFETIME_SECONDS: "3",
+        }),
+      ],
+    },
+  };
+});
