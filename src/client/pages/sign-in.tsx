@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api, ApiError } from "../api.ts";
 import { afterSignIn, pendingJoin } from "../pending-join.ts";
+import { sessionChannel } from "../session-channel.ts";
 import { useSession } from "../session.tsx";
 
 const messages: Record<string, string> = {
@@ -39,6 +40,7 @@ function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
       if (signUp) await api.signUp(field("name"), field("email"), field("password"));
       else await api.signIn(field("email"), field("password"));
       await refresh();
+      sessionChannel.announce("signed-in");
       navigate(afterSignIn(), { replace: true });
     } catch (caught) {
       setError(describe(caught));

@@ -4,8 +4,10 @@ import { api } from "./api.ts";
 import { pendingJoin } from "./pending-join.ts";
 import { AuthErrorPage } from "./pages/auth-error.tsx";
 import { JoinPage } from "./pages/join.tsx";
+import { RoomPage } from "./pages/room.tsx";
 import { RoomsPage } from "./pages/rooms.tsx";
 import { SignInPage, SignUpPage } from "./pages/sign-in.tsx";
+import { sessionChannel } from "./session-channel.ts";
 import { useSession } from "./session.tsx";
 
 export function App() {
@@ -15,6 +17,8 @@ export function App() {
     await api.signOut();
     // A code waiting for this person must not carry over to whoever signs in next.
     pendingJoin.clear();
+    // Every other tab drops its room and its socket too (spec 8.4).
+    sessionChannel.announce("signed-out");
     await refresh();
     navigate("/sign-in");
   };
@@ -44,6 +48,7 @@ export function App() {
             <Route path="/" element={me ? <RoomsPage /> : <Navigate to="/sign-in" replace />} />
             <Route path="/sign-in" element={<SignInPage />} />
             <Route path="/sign-up" element={<SignUpPage />} />
+            <Route path="/rooms/:id" element={<RoomPage />} />
             <Route path="/join" element={<JoinPage />} />
             <Route path="/auth/error" element={<AuthErrorPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />

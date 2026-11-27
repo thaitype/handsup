@@ -51,6 +51,7 @@ export default defineConfig(async () => {
           "!test/**/*.short-ttl.test.ts",
           "!test/**/*.production.test.ts",
           "!test/**/*.node-env-test.test.ts",
+          "!test/client/**",
         ]),
         // Time limits set to seconds, so expiry tests wait in real time (spec 7.0).
         project("short-ttl", ["test/**/*.short-ttl.test.ts"], {
@@ -62,6 +63,8 @@ export default defineConfig(async () => {
         project("production", ["test/**/*.production.test.ts"], { NODE_ENV: "production" }),
         // The library's weakest defaults (origin check skipped, secret check skipped).
         project("node-env-test", ["test/**/*.node-env-test.test.ts"], { NODE_ENV: "test" }),
+        // The browser's room connection, on plain Node with controlled time and a fake browser.
+        { test: { name: "client", environment: "node", include: ["test/client/**/*.test.ts"] } },
       ],
     },
   };

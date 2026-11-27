@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Link } from "react-router";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -113,7 +114,9 @@ export function RoomsPage() {
         <ul className="grid gap-3" data-testid="rooms">
           {rooms?.map((room) => (
             <li key={room.id} className="rounded-lg border p-4" data-testid="room">
-              <div className="font-medium">{room.name}</div>
+              <Link to={`/rooms/${room.id}`} className="font-medium underline underline-offset-4">
+                {room.name}
+              </Link>
               {room.inviteCode && (
                 <div className="mt-2 grid gap-2 text-sm">
                   <div>

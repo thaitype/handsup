@@ -1,4 +1,6 @@
 /** Calls to the app's own API. Every write is JSON, which the server's write gate requires. */
+import type { RemoveResult, UpsertResult, Visibility } from "../shared/protocol.ts";
+
 export type Me = { id: string; name: string; email: string; role: "instructor" | "learner" };
 export type RoomSummary = { id: string; name: string; createdAt: number; inviteCode?: string };
 
@@ -12,10 +14,14 @@ export class ApiError extends Error {
   }
 }
 
-async function call<T>(path: string, body?: unknown): Promise<T> {
+async function call<T>(
+  path: string,
+  body?: unknown,
+  method: "GET" | "POST" | "PUT" | "DELETE" = body === undefined ? "GET" : "POST",
+): Promise<T> {
   const response = await fetch(path, {
-    method: body === undefined ? "GET" : "POST",
-    headers: body === undefined ? {} : { "content-type": "application/json" },
+    method,
+    headers: method === "GET" ? {} : { "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
     credentials: "same-origin",
   });
@@ -27,7 +33,25 @@ async function call<T>(path: string, body?: unknown): Promise<T> {
   return data as T;
 }
 
+const questions = (roomId: string) => `/api/rooms/${encodeURIComponent(roomId)}/questions`;
+const oneQuestion = (roomId: string, questionId: string) =>
+  `${questions(roomId)}/${encodeURIComponent(questionId)}`;
+
 export const api = {
+  ask: (roomId: string, body: string, visibility: Visibility, clientRequestId: string) =>
+    call<UpsertResult>(questions(roomId), { body, visibility, clientRequestId }),
+  answer: (roomId: string, questionId: string, body: string, clientRequestId: string) =>
+    call<UpsertResult>(`${oneQuestion(roomId, questionId)}/answers`, { body, clientRequestId }),
+  setResolved: (roomId: string, questionId: string, resolved: boolean) =>
+    call<UpsertResult>(`${oneQuestion(roomId, questionId)}/resolved`, { resolved }, "PUT"),
+  deleteQuestion: (roomId: string, questionId: string) =>
+    call<RemoveResult>(oneQuestion(roomId, questionId), undefined, "DELETE"),
+  deleteAnswer: (roomId: string, questionId: string, answerId: string) =>
+    call<UpsertResult>(
+      `${oneQuestion(roomId, questionId)}/answers/${encodeURIComponent(answerId)}`,
+      undefined,
+      "DELETE",
+    ),
   me: async (): Promise<Me | null> => {
     try {
       return await call<Me>("/api/me");

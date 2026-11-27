@@ -41,7 +41,7 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "wrangler types --include-runtime true && tsc --noEmit && tsc --noEmit -p src/client && tsc --noEmit -p e2e",
+    "typecheck": "wrangler types --include-runtime true && tsc --noEmit && tsc --noEmit -p src/client && tsc --noEmit -p test/client && tsc --noEmit -p e2e",
     "test": "vitest run",
     "test:e2e:spikes": "playwright test",
     "test:e2e:app": "playwright test -c playwright.app.config.ts",
