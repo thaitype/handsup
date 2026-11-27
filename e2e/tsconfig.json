@@ -1,0 +1,5 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "module": "nodenext", "moduleResolution": "nodenext", "lib": ["es2023", "dom"], "types": ["node"] },
+  "include": ["**/*.ts", "../playwright.config.ts", "../playwright.app.config.ts", "../playwright.slow.config.ts", "../playwright.headed.config.ts"]
+}

@@ -1,0 +1,54 @@
+{
+  "name": "handsup",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "packageManager": "pnpm@11.5.0",
+  "dependencies": {
+    "@better-auth/utils": "0.5.1",
+    "better-auth": "1.7.28",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "hono": "4.13.22",
+    "radix-ui": "1.8.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-router": "8.5.3",
+    "tailwind-merge": "3.7.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.70.2",
+    "@cloudflare/vitest-plugin": "1.9.2",
+    "@playwright/test": "1.62.0",
+    "@tailwindcss/vite": "4.3.5",
+    "@types/node": "22.20.7",
+    "@types/react": "19.3.3",
+    "@types/react-dom": "19.3.0",
+    "@types/ws": "8.18.2",
+    "@vitejs/plugin-react": "6.3.0",
+    "tailwindcss": "4.3.5",
+    "tw-animate-css": "1.4.0",
+    "typescript": "5.9.3",
+    "vite": "8.3.8",
+    "vitest": "4.1.12",
+    "wrangler": "4.168.0",
+    "ws": "8.23.0"
+  },
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "wrangler types --include-runtime true && tsc --noEmit && tsc --noEmit -p src/client && tsc --noEmit -p test/client && tsc --noEmit -p e2e",
+    "test": "vitest run",
+    "test:e2e:spikes": "playwright test",
+    "test:e2e:app": "playwright test -c playwright.app.config.ts",
+    "test:e2e:slow": "playwright test -c playwright.slow.config.ts",
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "gate": "node scripts/gate.mjs",
+    "gen:auth-migration": "node scripts/gen-auth-migration.mjs",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local"
+  }
+}
