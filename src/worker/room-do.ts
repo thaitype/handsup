@@ -120,7 +120,12 @@ export class RoomDO extends DurableObject<Env> {
     const question = this.#question(earlier?.question_id ?? questionId);
     if (!question || !canSee(viewer, question)) return failed("not_found");
     if (viewer.role !== "instructor" && question.author_id !== viewer.id) return failed("forbidden");
-    if (!earlier) {
+    // A retry changes nothing, so it cannot reopen a question resolved since the first try.
+    if (earlier) return this.#view(viewer, question);
+    // The asker writing again reopens a resolved question. An instructor's message does not.
+    const reopens = viewer.role !== "instructor" && question.resolved_at !== null;
+    const changed = reopens ? { ...question, resolved_at: null } : question;
+    this.ctx.storage.transactionSync(() => {
       sql.exec(
         `insert into answer (id, question_id, author_id, author_name, body, created_at, client_request_id)
          values (?, ?, ?, ?, ?, ?, ?)`,
@@ -132,9 +137,10 @@ export class RoomDO extends DurableObject<Env> {
         Date.now(),
         input.clientRequestId,
       );
-      this.#publish(question);
-    }
-    return this.#view(viewer, question);
+      if (reopens) sql.exec("update question set resolved_at = null where id = ?", question.id);
+    });
+    this.#publish(changed);
+    return this.#view(viewer, changed);
   }
 
   setResolved(identity: Identity, questionId: string, resolved: boolean): UpsertOutcome {

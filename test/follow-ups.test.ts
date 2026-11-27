@@ -1,4 +1,5 @@
 /** The thread under a question: the asker and instructors write in it, nobody else. */
+import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { POST_LIMIT } from "../src/shared/protocol.ts";
 import {
@@ -38,11 +39,68 @@ describe("follow-ups", () => {
       const forB = await view(b.browser);
       if (hidden) expect(forB).toBeUndefined();
       else expect(forB!.answers.map((m) => [m.authorName, m.isMine])).toEqual([["Instructor Ida", false], [a.name, false], ["Instructor Ida", false]]);
-      // A follow-up leaves the resolved state as it was.
-      await questionFrom(await api.resolve(instructor, asked.id));
-      expect((await questionFrom(await api.answer(a.browser, asked.id, "after resolved"))).resolvedAt).not.toBeNull();
     }
   });
+
+  it.each(["public", "private"] as const)(
+    "reopens a resolved %s question when the asker writes, and only then",
+    async (visibility) => {
+      const { room, instructor, member, stub } = await classroom();
+      const api = roomApi(room.id);
+      const a = await member("A");
+      const b = await member("B");
+      const asked = await questionFrom(await api.ask(a.browser, "q", visibility));
+      const sockets = [await connect(instructor, room.id), await connect(a.browser, room.id), await connect(b.browser, room.id)];
+      const state = async () =>
+        (await snapshotFrom(await api.snapshot(instructor))).questions.find((q) => q.id === asked.id)!.resolvedAt;
+      const resolve = () => api.resolve(instructor, asked.id);
+
+      // An instructor's message leaves it resolved.
+      await questionFrom(await resolve());
+      expect((await questionFrom(await api.answer(instructor, asked.id, "from the instructor"))).resolvedAt).not.toBeNull();
+      expect(await state()).not.toBeNull();
+
+      // The asker's message reopens it, for everyone who may see it, in one event.
+      const key = crypto.randomUUID();
+      const reopened = await questionFrom(await api.answer(a.browser, asked.id, "still stuck", key));
+      expect(reopened.resolvedAt).toBeNull();
+      expect(await state()).toBeNull();
+      const watchers = visibility === "public" ? sockets : sockets.slice(0, 2);
+      for (const socket of watchers) {
+        await socket.received("still stuck");
+        const event = socket.messages().find((m) => m.type === "question.upsert" && JSON.stringify(m).includes("still stuck"));
+        expect(event).toMatchObject({ question: { id: asked.id, resolvedAt: null } });
+      }
+      if (visibility === "private") {
+        // Control: B's socket is alive and heard nothing of this thread.
+        await questionFrom(await api.ask(a.browser, "public control"));
+        await sockets[2]!.received("public control");
+        expect(sockets[2]!.frames.join()).not.toContain("still stuck");
+      }
+
+      // Resolved again by the instructor: a retry of the same message must not reopen it.
+      await questionFrom(await resolve());
+      const retried = await questionFrom(await api.answer(a.browser, asked.id, "still stuck", key));
+      expect(retried.resolvedAt).not.toBeNull();
+      expect(retried.answers.filter((m) => m.body === "still stuck")).toHaveLength(1);
+      expect(await state()).not.toBeNull();
+      // Control: a new message does reopen it.
+      expect((await questionFrom(await api.answer(a.browser, asked.id, "and again"))).resolvedAt).toBeNull();
+
+      // The message and the reopening happen together or not at all.
+      await questionFrom(await resolve());
+      await runInDurableObject(stub, (_o, storage) => {
+        storage.storage.sql.exec(
+          "create trigger refuse before update on question begin select raise(abort, 'refused'); end",
+        );
+      });
+      const before = (await snapshotFrom(await api.snapshot(instructor))).questions.find((q) => q.id === asked.id)!;
+      expect((await api.answer(a.browser, asked.id, "must not stay")).status).toBe(500);
+      const after = (await snapshotFrom(await api.snapshot(instructor))).questions.find((q) => q.id === asked.id)!;
+      expect(after).toEqual(before);
+      for (const socket of sockets) socket.socket.close(1000);
+    },
+  );
 
   it("refuses everyone else without revealing a private question", async () => {
     const { room, guest, member, outsider } = await classroom();
