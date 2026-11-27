@@ -2,6 +2,7 @@
 import type { Context, MiddlewareHandler } from "hono";
 import type { z } from "zod";
 import { createAuth } from "./auth.ts";
+import { requireVar } from "./config.ts";
 import { roleOf, type Role } from "./role.ts";
 
 export type AppEnv = { Bindings: Env };
@@ -12,13 +13,18 @@ export const errorResponse = (c: Context, status: 400 | 401 | 403 | 404 | 409 | 
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
+/** Spec 7.6: the request names our own origin. Browsers send it on every write and upgrade. */
+export const fromOurOrigin = (c: Context<AppEnv>) =>
+  c.req.header("origin") === new URL(requireVar(c.env, "BETTER_AUTH_URL")).origin;
+
 /**
  * The one gate every write under /api/ passes, the app's routes and Better Auth's alike.
- * A write must say it is JSON, which a cross-site form cannot do without a CORS preflight.
- * M4 adds the Origin check (spec 7.6, AC17) here, so it covers every write at once.
+ * A write must come from our origin (spec 7.6, AC17) and say it is JSON, which a cross-site
+ * form cannot do without a CORS preflight.
  */
 export const writeGate: MiddlewareHandler<AppEnv> = async (c, next) => {
   if (SAFE_METHODS.has(c.req.method)) return next();
+  if (!fromOurOrigin(c)) return errorResponse(c, 403, "forbidden_origin");
   const type = c.req.header("content-type") ?? "";
   if (!/^application\/json(;|$)/i.test(type)) {
     return errorResponse(c, 415, "unsupported_media_type");

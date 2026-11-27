@@ -10,7 +10,8 @@ const clientAddress = () => `198.51.100.${(nextClient++ % 250) + 1}`;
 
 export class Browser {
   readonly #cookies = new Map<string, string>();
-  readonly #address = clientAddress();
+  /** The client address Cloudflare would report. Settable, for people behind one address. */
+  address = clientAddress();
 
   constructor(private readonly send = (request: Request) => exports.default.fetch(request)) {}
 
@@ -26,7 +27,7 @@ export class Browser {
   async request(path: string, init: RequestInit, origin: string | null = ORIGIN): Promise<Response> {
     const headers = new Headers(init.headers);
     if (origin !== null) headers.set("origin", origin);
-    headers.set("cf-connecting-ip", this.#address);
+    headers.set("cf-connecting-ip", this.address);
     if (this.#cookies.size > 0) {
       headers.set("cookie", [...this.#cookies].map(([k, v]) => `${k}=${v}`).join("; "));
     }

@@ -2,8 +2,7 @@
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { BODY_MAX_CHARS } from "../shared/protocol.ts";
-import { requireVar } from "./config.ts";
-import { errorResponse, readBody, sessionOf, type AppEnv, type Viewer } from "./http.ts";
+import { errorResponse, fromOurOrigin, readBody, sessionOf, type AppEnv, type Viewer } from "./http.ts";
 import { takePostAttempt } from "./post-limit.ts";
 import { isMember, roomFor } from "./room-access.ts";
 import { CONNECTION_HEADER, type Connection, type RemoveOutcome, type UpsertOutcome, type WriteError } from "./room-do.ts";
@@ -58,10 +57,6 @@ questions.get("/api/rooms/:id/snapshot", async (c) => {
   if (entry.refused) return entry.refused;
   return c.json(await entry.stub.snapshot(entry.identity, entry.room));
 });
-
-/** Spec 7.6: a browser sends Origin on every WebSocket upgrade, and it must be ours. */
-const fromOurOrigin = (c: Context<AppEnv>) =>
-  c.req.header("origin") === new URL(requireVar(c.env, "BETTER_AUTH_URL")).origin;
 
 questions.get("/api/rooms/:id/ws", async (c) => {
   if (!fromOurOrigin(c)) return errorResponse(c, 403, "forbidden");
