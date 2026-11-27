@@ -121,3 +121,24 @@ Nothing in the app is switched off: the blocking happens inside that browser win
 `GET /api/version` answers `{"commit": "<git commit>", "dirty": <true|false>}`. `dirty` is true
 when tracked files differed from that commit at build time. `pnpm build` fails if git cannot read
 the commit; under `pnpm dev` without git the commit is `"unknown"`.
+
+## Known issues
+
+### A reset link made before an email joins `INSTRUCTOR_EMAILS` still works afterwards
+
+- **When it happens:** an instructor creates a reset link for a learner, and that learner's
+  email is added to `INSTRUCTOR_EMAILS` (a new deploy) while the link is still valid (up to
+  24 hours). The instructor refusal is checked only when a link is created, not when it is used.
+- **What goes wrong if it does:** whoever holds the link can set the new instructor's password
+  and sign in as them, which takes over the instructor account and shows every private question
+  and asker name in every room.
+- **Status:** accepted as a known issue by Mild (2026-11-27): "อ้อ เคส นี้ ไม่เกิดครับ
+  เดี๋ยวเขียนว่าเป็น known issue โอกาสเกิดยาก". Not fixed in code.
+- **Precaution:** before adding an email to `INSTRUCTOR_EMAILS`, make sure that user has no
+  pending reset link: wait 24 hours after the last link was made for them, or have the operator
+  delete their tokens. The command below has **never been run** against a real account:
+
+  ```sh
+  wrangler d1 execute <database> --remote --command \
+    "DELETE FROM verification WHERE identifier LIKE 'reset-password:%' AND value = (SELECT id FROM \"user\" WHERE email = '<email in lower case>')"
+  ```
