@@ -312,8 +312,8 @@ library มี default ที่ขึ้นกับ `NODE_ENV` ซึ่งบ
 | `rateLimit.enabled` | `true` |
 | `advanced.disableOriginCheck` | `false` (ไม่ตั้งจะถูกข้ามเมื่อ `NODE_ENV=test`) |
 | `advanced.useSecureCookies` | จาก scheme ของ `BETTER_AUTH_URL` |
-| `secret` | ขาดหรือสั้นกว่า 32 ตัว: fail ทันทีด้วย check ของเราเอง (library ตรวจ default secret เฉพาะ production) |
-| `onAPIError.errorURL` | หน้า error ของ app (หน้า default ของ library ต่างกันตาม production) |
+| `secret` | ขาดหรือสั้นกว่า 32 ตัว: fail ทันทีด้วย check ของเราเอง (library ตรวจ default secret เฉพาะ production) **ห้ามมี binding `BETTER_AUTH_SECRETS`**: library 1.7.28 อ่าน `options.secrets ?? env.BETTER_AUTH_SECRETS` และถ้ามีจะใช้แทน `secret` ข้ามการตรวจของเรา app ต้อง fail ทันทีถ้ามี binding นี้ (M2) และ runbook ห้ามตั้ง |
+| `onAPIError.errorURL` | `<BETTER_AUTH_URL>/auth/error` หน้าของ SPA (หน้า default ของ library ต่างกันตาม production) หน้านั้นต้องอธิบาย `error` ใน query อย่างน้อย `account_not_linked` (7.2) และมีข้อความกลางสำหรับค่าอื่น เช่น `state_mismatch` |
 | `advanced.backgroundTasks.handler` | **ห้ามตั้ง** (7.4) |
 | `verification.storeIdentifier` | `"plain"` (7.4 ลบ token ด้วย prefix) |
 | `revokeSessionsOnPasswordReset` | `true` |
@@ -321,7 +321,7 @@ library มี default ที่ขึ้นกับ `NODE_ENV` ซึ่งบ
 | `session.cookieCache` | ปิด |
 | `advanced.database.validateSchema` | `false` (ค่า default ตรวจ schema ด้วย query เพิ่มราว 7 ครั้งและอ่านราว 60 แถวทุก request เพราะสร้าง auth ต่อ request วัดใน M0) schema ถูกคุมด้วย drift test ใน `pnpm test` แทน: `getMigrations(authOptions(env))` ต้องไม่มีตารางหรือ column ที่ต้องสร้างเพิ่ม |
 
-Test (AC22) assert ค่าที่ resolve แล้ว ทั้งใน test env และ env แบบ production โดยต้องรันเป็นคนละ process เพราะ library อ่าน `isProduction` เป็นค่าคงที่ตอน import ส่วน IP fallback เป็น localhost ใน test/dev ปิดด้วย option ไม่ได้ จึงตรวจด้วย AC18
+Test (AC22) assert ค่าที่ resolve แล้ว ในสาม mode ของ `NODE_ENV`: ไม่ตั้ง (สภาพเดียวกับตอน deploy), `test` และ `production` แต่ละ mode เป็น Vitest project แยกซึ่งได้ runtime และ module graph ของตัวเอง (ไม่จำเป็นต้องเป็น OS process แยก) เพราะ library อ่าน `NODE_ENV` เป็นค่าคงที่ตอน import แต่ละ project assert ค่า `isProduction`/`isTest` ที่ library เห็นจริงเพื่อพิสูจน์ว่าแยกกัน ส่วน IP fallback เป็น localhost ใน test/dev ปิดด้วย option ไม่ได้ จึงตรวจด้วย AC18
 
 Config เรื่องเวลา (var ไม่ใช่ secret) `createAuth(env)` และ RoomDO อ่านจาก `env` เพื่อให้ test ตั้งเป็นไม่กี่วินาทีแล้วรอเวลาจริง ไม่พึ่ง fake timer ซึ่งยังไม่พิสูจน์ว่าไปถึง `Date.now()` ใน DO
 
@@ -339,7 +339,8 @@ Config เรื่องเวลา (var ไม่ใช่ secret) `createAut
 - เปิดเฉพาะ path ที่ใช้ (allowlist แบบ exact match ใน Hono): `POST /sign-up/email`, `POST /sign-in/email`, `POST /sign-in/social`, `GET /callback/google`, `POST /sign-out`, `GET /get-session`, `POST /reset-password`, `GET /error` ที่เหลือ `404` รวมถึง `/request-password-reset`, `GET /reset-password/:token`, `/update-user`, `/link-social` test ไล่ endpoint ทั้งหมดที่ `auth.api` ประกาศ แล้ว assert ว่าตัวที่ไม่อยู่ใน list ได้ `404`
 
 #### Password hashing (เรื่องเทคนิค director review, ล็อกก่อน M1)
-- ตั้ง `emailAndPassword.password.{hash,verify}` ของเราเอง**ตั้งแต่ M1** เก็บค่าแบบมี prefix บอก scheme และ parameter เช่น `scrypt-n16384-r16-p1$<salt>:<key>` เพื่อเปลี่ยน scheme ภายหลังได้โดยบัญชีเก่ายัง verify ได้
+- ตั้ง `emailAndPassword.password.{hash,verify}` ของเราเอง**ตั้งแต่ M1** เก็บค่าแบบมี prefix บอก scheme และ parameter เช่น `scrypt-n16384-r16-p1$<salt>:<key>` เพื่อเปลี่ยน scheme ภายหลังได้โดยบัญชีเก่ายัง verify ได้ (Mild รับรูปแบบนี้แล้ว 2026-11-27) prefix เป็นป้ายบอกสิ่งที่ library ทำ ไม่ใช่ setting จึงมี test คำนวณ key ซ้ำด้วย `node:crypto` scrypt ตาม parameter ในป้าย
+- ค่าที่เก็บซึ่ง prefix ไม่รู้จัก (รวมไม่มี prefix): verify โยน error และ sign-in ได้ `500` ไม่ใช่ `401` เพราะเป็นความผิดพลาดของข้อมูลฝั่ง server ไม่ใช่รหัสผิด
 - ค่าเริ่มต้น: เรียก hash ของ `@better-auth/utils/password` ซึ่ง export condition `workerd` เลือก `node:crypto` scrypt (N=16384, r=16, p=1) ต้องเปิด `nodejs_compat`
 - **M0 exit gate:** bundle จริง import `node:crypto` scrypt (ไม่ใช่ pure JS), sign-up และ sign-in ใน `workerd` local สำเร็จ, บันทึก wall time ต่อ hash
 - **ทางสำรองสำหรับปัญหา memory เท่านั้น และต้องแจ้ง Mild ก่อนใช้**: native scrypt N=16384, r=8, p=5 (16 MiB, ตรงกับ configuration ขั้นต่ำหนึ่งของ OWASP) memory ลดครึ่ง CPU ราว 2 เท่าของค่าเริ่มต้นที่วัดได้ (ส่วน 14) ถ้ายังเกิน memory: N=8192, r=8, p=10 (8 MiB)
@@ -358,7 +359,7 @@ Config เรื่องเวลา (var ไม่ใช่ secret) `createAut
 
 - **การตั้งค่า:** `INSTRUCTOR_EMAILS` เป็น plain var ไม่ใช่ secret และ**ไม่ commit** ลง config ใน repo: local ใช้ `.dev.vars`, บน Cloudflare ส่งตอน deploy ด้วย `--var "INSTRUCTOR_EMAILS:a@x,b@y"` ค่าว่างคือ `--var "INSTRUCTOR_EMAILS:"` (อ่าน source ของ wrangler 4.168.0 แล้วได้ string ว่าง) ทุก deploy ต้องส่ง และไม่เปิด `keep_vars` เพื่อให้การลืมส่งทำให้ binding หายและ app fail (ปิดไว้ก่อน; พฤติกรรมตอน deploy จริงยังเป็นการอนุมาน)
 - **พิสูจน์ใน M5 (local):** `--var` และ `.dev.vars` ที่เป็นค่าว่างให้ string ว่าง ไม่ใช่ binding ที่หายไป ส่วนบน Cloudflare จริงตรวจใน post-check (ยังไม่ยืนยัน)
-- **การตรวจค่า:** แยกด้วย comma, trim, lowercase แล้วตรวจแต่ละรายการด้วยกฎ email เดียวกับ Better Auth (`z.email()`) รายการใดผิดรูป (รวมรายการว่างจาก comma เกิน) ให้**ปฏิเสธทั้ง list** และ fail ค่าที่ว่างทั้งสตริงคือ list ว่าง การพิมพ์ผิดที่ยังเป็นรูปแบบ email ถูกต้องจับไม่ได้ ต้องอาศัย AC24
+- **การตรวจค่า:** แยกด้วย comma, trim, lowercase แล้วตรวจแต่ละรายการด้วยกฎ email เดียวกับ Better Auth (`z.email()`) รายการใดผิดรูป (รวมรายการว่างจาก comma เกิน) ให้**ปฏิเสธทั้ง list** และ fail ค่าที่ว่างทั้งสตริง (`""` เท่านั้น) คือ list ว่าง ส่วนค่าที่มีแต่ช่องว่างถือว่าผิดรูป ขณะที่ list ผิดรูป ทุก request ของ `/api/auth/*` และ `/api/me` ได้ `500` (fail แบบเห็นชัด ไม่ใช่ทุกคนกลายเป็น learner เงียบ ๆ) Zod เป็น dependency ตรงที่ pin ให้ตรงกับ copy ที่ Better Auth ใช้ เมื่อ bump `better-auth` ต้อง pin ใหม่ให้ตรงกัน การพิมพ์ผิดที่ยังเป็นรูปแบบ email ถูกต้องจับไม่ได้ ต้องอาศัย AC24
 - คำนวณจาก env ทุกครั้ง: เอา email ออกจาก list แล้วหมดสิทธิ์ เพิ่มแล้วได้สิทธิ์ทันทีกับบัญชีที่มีอยู่
 - เพราะ role ผูกกับ email อย่างเดียว **ห้ามมีทางเปลี่ยน email**: `/update-user`, `/change-email` ต้องเป็น `404` (AC3)
 - ความเป็นเจ้าของ email ไม่ถูกพิสูจน์โดยระบบเมื่อใช้ password (F12) การควบคุมอยู่ที่ runbook ใน N7
@@ -485,7 +486,7 @@ Input ตรวจด้วย schema และ reject field ที่ไม่�
 | AC1 | สมัครด้วย password แล้ว login ได้ เป็น learner | Auto, Manual |
 | AC2 | Email ใน list login ด้วย password (Auto) หรือ Google (Manual) ได้หน้า instructor, email อื่นด้วยวิธีเดียวกันได้ learner | Auto, Manual |
 | AC3 | สมัครด้วย password โดยใช้ email ใน list (รวมตัวพิมพ์ต่างกัน) สำเร็จและเป็นผู้สอน, email นอก list เป็น learner. ผู้ใช้เปลี่ยน email ไม่ได้: `/update-user` และ `/change-email` ได้ `404` (control: `/get-session` ของ user เดียวกันได้ `200` และ email เดิม) | Auto |
-| AC4 | Role ตาม env: user เดียวกัน เมื่อ list ไม่มี email ของเขา API ของ instructor ได้ `403`, เมื่อ list มีได้ `200` โดยไม่ต้องมี Google account หรือ `emailVerified`. list ว่าง: ไม่มีใครเป็นผู้สอน | Auto |
+| AC4 | Role ตาม env: user เดียวกัน เมื่อ list ไม่มี email ของเขา API ของ instructor ได้ `403`, เมื่อ list มีได้ `200` โดยไม่ต้องมี Google account หรือ `emailVerified`. list ว่าง: ไม่มีใครเป็นผู้สอน. M1 ตรวจผ่าน role ของ `/api/me` ส่วน `403`/`200` ของ API ผู้สอนตรวจใน M2 ด้วย `POST /api/rooms` (API ผู้สอนตัวแรก) | Auto |
 | AC5 | ไม่ auto-link: บัญชี password เดิมกด Google ด้วย email เดียวกันได้ `account not linked`, บัญชี Google เดิมสมัคร password ซ้ำถูกปฏิเสธ รวมกรณี email ผู้สอน. mock provider จำกัดเวลาครึ่งวันใน M0 ถ้าทำไม่ได้: assert config ที่ resolve แล้ว (ไม่มี `trustedProviders`, `requireLocalEmailVerified` ไม่เป็น `false`) + Manual. fallback นี้พิสูจน์แค่ config ไม่ใช่พฤติกรรม | Auto, Manual |
 | AC6 | Instructor สร้าง Room ได้ code 10 ตัวตาม alphabet, learner สร้างไม่ได้ | Auto |
 | AC7 | Join ด้วย code และ direct link ได้ รวมกรณีต้อง login ก่อน, code หลัง rotate ใช้ไม่ได้ (code ใหม่ใช้ได้), คนไม่ join เปิด WS ไม่ได้ (สมาชิกเปิดได้) | Auto, Manual |

@@ -302,3 +302,29 @@ Also: `pnpm typecheck` exit 0; `pnpm test` 30/30 across 6 files.
 | R24 drop per-user snapshot cap | Accept | §7.6 and AC30 edited |
 | R25 JSON content type only on JSON responses | Accept | `nosniff` stays on every `/api/*` response; a JSON content type on `101`/`204`/redirects would be wrong |
 | R26 slow Playwright project + one gate script | Accept | Keeps `pnpm test` fast; the gate script is also the one command for milestone checks |
+
+## Round 8: M1 verification and the builder's judgment calls (2026-11-27)
+
+Director re-ran M1 from a fresh local clone of `feat/v1` at `8fefb4a` (`pnpm install --frozen-lockfile`, no `.dev.vars`, no Cloudflare login).
+
+### Verdict: M1 PASS
+
+- `pnpm typecheck` exit 0; `pnpm test` **75 passed** (12 files; default 65, short-ttl 2, production 8); `pnpm build && pnpm check:bundle` "OK: native node:crypto scrypt only".
+- 18 deliberate breaks, each red and reverted: hash made with r=8 under the r16 label, prefix dropped, verify accepting a bare hash, wrapper unwired, `update-user` added to the allowlist, lowercase route matching, allowlist removed, production project with `NODE_ENV=development`, `disableOriginCheck` removed (red in both projects), cookie cache on, 16-character secret accepted, schema check on, `nosniff` removed, JSON type kept on redirects, loose email check, list not checked in `createAuth`, role ignoring the list, errorURL left at the library default.
+- Built bundle under `vite preview` (workerd): sign-up `TEACH@example.test` 200 → `/api/me` instructor; wrong password 401; `POST /update-user` 404 `{"error":"not_found"}` with `nosniff`; bad-state Google callback 302 to `/auth/error?error=state_mismatch` with no content type; `HEAD get-session` and `HEAD update-user` 404; stored hash `scrypt-n16384-r16-p1$<32 hex>:<128 hex>` (length 182).
+- **Hash:** only the prefix changed. The wrapper calls `@better-auth/utils/password` unchanged; a test recomputes the key with `node:crypto` scrypt N=16384 r=16 p=1 and fails when the real parameters differ from the label. Nothing for Mild beyond the prefix he approved.
+- **AC22 "separate process":** acceptable as is. What the spec needs is a fresh import with `NODE_ENV` fixed, not an OS process. Each project asserts the `isProduction` the library sees (false in default, true in production), and that assertion goes red if the production project's env is changed. Three distinct workerd processes ran concurrently during the run. The spec text is updated. Gap: no `NODE_ENV=test` mode, where the library's defaults are weakest; the option-level assertions already catch a missing `disableOriginCheck`, so it moves to M2.
+
+### Rulings
+
+| Item | Ruling | Reason |
+| --- | --- | --- |
+| errorURL `<BETTER_AUTH_URL>/auth/error`, SPA page explains `account_not_linked` | Accept | Named in 7.0; the page is frontend work in the first UI milestone |
+| Unknown hash prefix → verify throws → 500 | Accept | A stored hash we cannot read is a server fault; a 401 would hide it as a wrong password |
+| Spaces-only `INSTRUCTOR_EMAILS` is invalid | Accept | Only `""` means empty; anything else that is not a list of emails fails loudly |
+| zod 4.6.7 direct and pinned | Accept, with a deferral | Lockfile shows `better-auth` resolves the same 4.6.7; re-check on every `better-auth` bump |
+| Malformed list → every auth request and `/api/me` 500 | Accept | Fail closed and visible, per 7.3 |
+| Default project runs with `NODE_ENV` unset | Accept | That is the deploy condition; add a `test` mode in M2 |
+| Move the instructor-API half of AC4 to M2 | Accept | No instructor API exists before `POST /api/rooms` |
+| `BETTER_AUTH_SECRETS` note | Accept, strengthened | Source: `options.secrets ?? parseSecretsEnv(env.BETTER_AUTH_SECRETS)` replaces our checked `secret`. A note is a promise; the app must refuse to start when the binding exists (M2) |
+| HEAD near-miss dropped | Accept for M1, add in M2 | Measured: HEAD on listed and unlisted paths both get 404, which fails closed; add a test so it stays that way |
