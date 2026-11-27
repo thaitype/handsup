@@ -452,3 +452,11 @@ Director (Freya's session) verified `feat/v1` at `7b8d037` from a cold clone (`p
 ### Spec text applied
 
 6.1 matrix (writing and deleting in the thread), 8.2 `AnswerView` and the thread rules, N5 rows (answers, resolved, post rate), AC9 phases, AC11 private-thread write, AC12 thread rows.
+
+## Round 14: reset-link takeover accepted as a known issue (2026-11-27)
+
+- Decision by Mild (relayed by Clara, quoted): "อ้อ เคส นี้ ไม่เกิดครับ เดี๋ยวเขียนว่าเป็น known issue โอกาสเกิดยาก".
+- This is **Mild accepting the risk**, not a fix. The behaviour confirmed in round 12 is unchanged in code: a reset link created while the target was a learner still works after their email is added to `INSTRUCTOR_EMAILS`, so its holder can take over the new instructor account (and with it every private question and asker name) within the link's 24 h lifetime.
+- Moved from plan §5 (before-deploy deferral) to plan §6 Known issues, README "Known issues", and the deploy guide.
+- Mitigation is procedural only: before adding an email to the list, no pending reset link for that user (wait 24 h, or the operator deletes the tokens; the D1 command is written down but has never been run).
+- The director's round 12 recommendation (re-check the role when the link is used, delete the token and refuse) stays available if Mild changes his mind.
