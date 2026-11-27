@@ -47,7 +47,9 @@ async function deploy({ secretsPath, instructors, dryRun, replaceDns }) {
   const list = checkInstructors(instructors);
   const secrets = parseSecretsFile(readFileSync(secretsPath, "utf8"));
   const domain = secrets.HANDSUP_DOMAIN;
-  hide(...Object.values(secrets), ...list.split(","), instructors);
+  // The zone name on its own is private too.
+  const zone = domain.split(".").slice(1).join(".");
+  hide(...Object.values(secrets), zone, ...list.split(","), instructors);
 
   const dirty = run("git", ["status", "--porcelain"], { quiet: true }).stdout.trim();
   if (dirty) throw new Error(`the working tree is not clean:\n${dirty}`);

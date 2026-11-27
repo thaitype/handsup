@@ -4,17 +4,26 @@ import { Resolver } from "node:dns/promises";
 
 const ABSENT = new Set(["ENOTFOUND", "ENODATA"]);
 
-async function records(domain) {
-  const system = new Resolver({ timeout: 5000, tries: 2 });
+/**
+ * The Cloudflare name servers of the zone holding `domain` (a custom domain needs one). The
+ * name itself is asked about last, which is only reached when it is the zone apex.
+ */
+export async function zoneServers(domain, resolver) {
   const labels = domain.split(".");
-  let servers;
-  for (let i = 1; i < labels.length - 1 && !servers; i++) {
-    servers = await system.resolveNs(labels.slice(i).join(".")).catch((error) => {
-      if (ABSENT.has(error.code)) return undefined;
+  const starts = [...labels.keys()].slice(1, -1).concat(0);
+  for (const start of starts) {
+    const servers = await resolver.resolveNs(labels.slice(start).join(".")).catch((error) => {
+      if (ABSENT.has(error.code)) return [];
       throw error;
     });
+    if (servers.some((name) => /\.cloudflare\.com\.?$/i.test(name))) return servers;
   }
-  if (!servers) throw new Error("no name servers found for the domain's zone");
+  throw new Error("no Cloudflare zone found for the domain");
+}
+
+async function records(domain) {
+  const system = new Resolver({ timeout: 5000, tries: 2 });
+  const servers = await zoneServers(domain, system);
   const authority = new Resolver({ timeout: 5000, tries: 2 });
   authority.setServers(await system.resolve4(servers[0]));
   const found = await Promise.all(

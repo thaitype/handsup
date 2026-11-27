@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { domainBlocker } from "../../scripts/lib/domain.mjs";
+import { domainBlocker, zoneServers } from "../../scripts/lib/domain.mjs";
 import {
   checkInstructors,
   d1OnlyConfig,
@@ -93,6 +93,27 @@ describe("database id and configs", () => {
 });
 
 describe("domain guard", () => {
+  const dns = (zones) => {
+    const asked = [];
+    const resolveNs = async (name) => {
+      asked.push(name);
+      if (zones[name]) return zones[name];
+      throw Object.assign(new Error(), { code: "ENODATA" });
+    };
+    return { asked, resolveNs };
+  };
+  const cf = ["ada.ns.cloudflare.com"];
+
+  it("finds the zone without asking about a name that may not exist yet", async () => {
+    const sub = dns({ "example.test": cf });
+    expect(await zoneServers("forum.example.test", sub)).toEqual(cf);
+    expect(sub.asked).toEqual(["example.test"]);
+    // A zone apex under a two-part suffix: the suffix's own servers are not the zone's.
+    const apex = dns({ "co.test": ["ns.registry.test"], "school.co.test": cf });
+    expect(await zoneServers("school.co.test", apex)).toEqual(cf);
+    await expect(zoneServers("forum.other.test", dns({}))).rejects.toThrow(/no Cloudflare zone/);
+  });
+
   const look = (records, handsup) => ({ records: async () => records, isHandsup: async () => handsup });
   it("allows a free name or one that already serves handsup, and nothing else", async () => {
     expect(await domainBlocker("f.example.test", look([], false))).toBeNull();
