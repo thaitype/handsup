@@ -1,5 +1,5 @@
 /** People and rooms for the browser tests, made through the app's own API. */
-import { expect, type APIRequestContext, type Browser, type Page } from "@playwright/test";
+import { expect, type APIRequestContext, type Browser, type Locator, type Page } from "@playwright/test";
 
 // Must match e2e/app/server.mjs.
 export const INSTRUCTOR = "e2e-teacher@example.test";
@@ -67,6 +67,12 @@ export async function classroom(browser: Browser) {
 }
 
 export const question = (page: Page, text: string) => page.getByTestId("question").filter({ hasText: text });
+
+/** Presses a delete button inside `within` and confirms in the dialog it opens. */
+export async function confirmDelete(page: Page, within: Locator, label: "Delete question" | "Delete answer" | "Delete message") {
+  await within.getByRole("button", { name: label }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Delete", exact: true }).click();
+}
 
 const isRoomSocket = (url: string) => /\/api\/rooms\/[^/]+\/ws$/.test(url);
 

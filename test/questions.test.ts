@@ -64,9 +64,9 @@ describe("AC11: a question you may not see looks like one that does not exist", 
 
     const attempts: [string, (qid: string) => Promise<Response>, number][] = [
       ["delete question", (qid) => api.removeQuestion(b.browser, qid), 404],
-      ["answer", (qid) => api.answer(b.browser, qid, "x"), 403],
+      ["answer", (qid) => api.answer(b.browser, qid, "x"), 404],
       ["resolve", (qid) => api.resolve(b.browser, qid), 403],
-      ["delete answer", (qid) => api.removeAnswer(b.browser, qid, answerId), 403],
+      ["delete answer", (qid) => api.removeAnswer(b.browser, qid, answerId), 404],
     ];
     for (const [label, attempt, status] of attempts) {
       const onHidden = await everything(await attempt(hidden.id));

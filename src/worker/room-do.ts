@@ -106,9 +106,9 @@ export class RoomDO extends DurableObject<Env> {
     return this.#view(viewer, row);
   }
 
+  /** Adds to the thread under a question: instructors, and the person who asked it. */
   answer(identity: Identity, questionId: string, input: { body: string; clientRequestId: string }): UpsertOutcome {
     const viewer = this.#viewer(identity);
-    if (viewer.role !== "instructor") return failed("forbidden");
     const sql = this.ctx.storage.sql;
     const earlier = sql
       .exec<{ question_id: string }>(
@@ -119,7 +119,13 @@ export class RoomDO extends DurableObject<Env> {
       .toArray()[0];
     const question = this.#question(earlier?.question_id ?? questionId);
     if (!question || !canSee(viewer, question)) return failed("not_found");
-    if (!earlier) {
+    if (viewer.role !== "instructor" && question.author_id !== viewer.id) return failed("forbidden");
+    // A retry changes nothing, so it cannot reopen a question resolved since the first try.
+    if (earlier) return this.#view(viewer, question);
+    // The asker writing again reopens a resolved question. An instructor's message does not.
+    const reopens = viewer.role !== "instructor" && question.resolved_at !== null;
+    const changed = reopens ? { ...question, resolved_at: null } : question;
+    this.ctx.storage.transactionSync(() => {
       sql.exec(
         `insert into answer (id, question_id, author_id, author_name, body, created_at, client_request_id)
          values (?, ?, ?, ?, ?, ?, ?)`,
@@ -131,9 +137,10 @@ export class RoomDO extends DurableObject<Env> {
         Date.now(),
         input.clientRequestId,
       );
-      this.#publish(question);
-    }
-    return this.#view(viewer, question);
+      if (reopens) sql.exec("update question set resolved_at = null where id = ?", question.id);
+    });
+    this.#publish(changed);
+    return this.#view(viewer, changed);
   }
 
   setResolved(identity: Identity, questionId: string, resolved: boolean): UpsertOutcome {
@@ -170,15 +177,20 @@ export class RoomDO extends DurableObject<Env> {
 
   deleteAnswer(identity: Identity, questionId: string, answerId: string): UpsertOutcome {
     const viewer = this.#viewer(identity);
-    if (viewer.role !== "instructor") return failed("forbidden");
     const question = this.#question(questionId);
     if (!question || !canSee(viewer, question)) return failed("not_found");
-    const { rowsWritten } = this.ctx.storage.sql.exec(
-      "delete from answer where id = ? and question_id = ?",
-      answerId,
-      question.id,
-    );
-    if (rowsWritten === 0) return failed("not_found");
+    const sql = this.ctx.storage.sql;
+    const message = sql
+      .exec<{ author_id: string }>(
+        "select author_id from answer where id = ? and question_id = ?",
+        answerId,
+        question.id,
+      )
+      .toArray()[0];
+    if (!message) return failed("not_found");
+    // Instructors delete any message, anyone else only their own.
+    if (viewer.role !== "instructor" && message.author_id !== viewer.id) return failed("forbidden");
+    sql.exec("delete from answer where id = ?", answerId);
     this.#publish(question);
     return this.#view(viewer, question);
   }

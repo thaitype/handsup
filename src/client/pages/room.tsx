@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Navigate, useParams } from "react-router";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -62,7 +63,8 @@ function Composer({
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!body.trim()) return;
-    requestId.current ??= crypto.randomUUID();
+    // randomUUID needs a secure context; the dev server is also opened over plain http by hostname.
+    requestId.current ??= Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
     const id = requestId.current;
     if (await run(() => post(body, id))) {
       requestId.current = null;
@@ -174,16 +176,25 @@ function Question({
           {question.answers.map((answer) => (
             <li key={answer.id} data-testid="answer" className="grid gap-1">
               <div className="flex items-center justify-between gap-2 text-sm">
-                <span className="font-medium">{answer.authorName}</span>
-                {isInstructor && (
-                  <Button
-                    size="sm"
+                <span className="flex items-center gap-2">
+                  <span className="font-medium" data-testid="message-author">
+                    {answer.authorName ?? "คุณ"}
+                  </span>
+                  {answer.fromInstructor && (
+                    <span className="rounded-full border px-2 text-xs" data-testid="instructor-mark">
+                      ผู้สอน
+                    </span>
+                  )}
+                </span>
+                {(isInstructor || answer.isMine) && (
+                  <ConfirmDelete
+                    label={answer.fromInstructor ? "Delete answer" : "Delete message"}
+                    title={answer.fromInstructor ? "Delete this answer?" : "Delete this message?"}
+                    description="This cannot be undone."
                     variant="ghost"
                     disabled={busy}
-                    onClick={() => run(() => api.deleteAnswer(roomId, question.id, answer.id))}
-                  >
-                    Delete answer
-                  </Button>
+                    onConfirm={() => run(() => api.deleteAnswer(roomId, question.id, answer.id))}
+                  />
                 )}
               </div>
               <p className="break-words whitespace-pre-wrap">{answer.body}</p>
@@ -191,10 +202,10 @@ function Question({
           ))}
         </ul>
       )}
-      {isInstructor && (
+      {(isInstructor || question.isMine) && (
         <Composer
-          label="Your answer"
-          submitLabel="Answer"
+          label={isInstructor ? "Your answer" : "Add a message"}
+          submitLabel={isInstructor ? "Answer" : "Send"}
           applyWrite={applyWrite}
           post={(body, id) => api.answer(roomId, question.id, body, id)}
         />
@@ -211,14 +222,14 @@ function Question({
               {resolved ? "Mark unresolved" : "Mark resolved"}
             </Button>
           )}
-          <Button
-            size="sm"
+          <ConfirmDelete
+            label="Delete question"
+            title="Delete this question?"
+            description="Its answers are deleted too. This cannot be undone."
             variant="outline"
             disabled={busy}
-            onClick={() => run(() => api.deleteQuestion(roomId, question.id))}
-          >
-            Delete question
-          </Button>
+            onConfirm={() => run(() => api.deleteQuestion(roomId, question.id))}
+          />
         </div>
       )}
       {error && <p className="text-destructive text-sm">{error}</p>}
@@ -247,6 +258,7 @@ function Room({ roomId }: { roomId: string }) {
   const { me, refresh } = useSession();
   const { room, questions, status, updatedAt, ended, applyWrite } = useRoom(roomId);
   const presenter = usePresenterMode();
+  const [showResolved, setShowResolved] = useState(true);
   const isInstructor = me?.role === "instructor";
 
   // The server says this session is over: ask who is signed in, which leads to sign-in.
@@ -264,13 +276,25 @@ function Room({ roomId }: { roomId: string }) {
     );
   }
   // Presenter mode removes private questions from what is rendered, so they are not in the page.
-  const shown = isInstructor && presenter.isOn ? questions.filter((q) => q.visibility !== "private") : questions;
+  const onScreen = isInstructor && presenter.isOn ? questions.filter((q) => q.visibility !== "private") : questions;
+  // Hiding resolved questions only narrows what presenter mode and the server already allow,
+  // and its count is taken from that list, so it says nothing about what is hidden otherwise.
+  const shown = showResolved ? onScreen : onScreen.filter((q) => q.resolvedAt === null);
+  const resolvedHidden = onScreen.length - shown.length;
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold" data-testid="room-name">
           {room?.name ?? "Room"}
         </h1>
+        <Button
+          size="sm"
+          variant={showResolved ? "outline" : "default"}
+          aria-pressed={showResolved}
+          onClick={() => setShowResolved((current) => !current)}
+        >
+          Show resolved
+        </Button>
         {isInstructor && (
           <Button size="sm" variant={presenter.isOn ? "default" : "outline"} aria-pressed={presenter.isOn} onClick={presenter.toggle}>
             Presenter mode
@@ -283,7 +307,21 @@ function Room({ roomId }: { roomId: string }) {
       ) : (
         <>
           {!isInstructor && <Ask roomId={roomId} applyWrite={applyWrite} />}
-          {shown.length === 0 && <p className="text-muted-foreground">No questions yet.</p>}
+          {!showResolved && (
+            <Alert data-testid="resolved-hidden">
+              <AlertDescription>
+                Resolved questions are hidden ({resolvedHidden}).{" "}
+                <button type="button" className="underline" onClick={() => setShowResolved(true)}>
+                  Show them
+                </button>
+              </AlertDescription>
+            </Alert>
+          )}
+          {shown.length === 0 && (
+            <p className="text-muted-foreground">
+              {resolvedHidden > 0 ? "No unresolved questions." : "No questions yet."}
+            </p>
+          )}
           <ul className="grid gap-3" data-testid="questions">
             {shown.map((question) => (
               <Question
