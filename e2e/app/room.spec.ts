@@ -1,6 +1,6 @@
 /** The room page against the real app: AC8, AC16 (every tab), AC21 and safe retries. */
 import { expect, test } from "@playwright/test";
-import { classroom, PASSWORD, question, unique, watchSnapshots, watchSockets } from "../room-support.ts";
+import { classroom, confirmDelete, PASSWORD, question, unique, watchSnapshots, watchSockets } from "../room-support.ts";
 
 const SOON = { timeout: 2_000 };
 
@@ -40,16 +40,16 @@ test("AC8: questions, answers, resolved and deletes reach every screen that may 
   for (const page of [asker, other]) await expect(question(page, open).getByTestId("answer")).toContainText(reply, SOON);
   await card.getByRole("button", { name: "Mark resolved" }).click();
   for (const page of [asker, other]) await expect(question(page, open).getByTestId("resolved")).toBeVisible(SOON);
-  await card.getByRole("button", { name: "Delete answer" }).click();
+  await confirmDelete(teacher, card, "Delete answer");
   for (const page of [asker, other]) await expect(question(page, open).getByTestId("answer")).toHaveCount(0, SOON);
-  await card.getByRole("button", { name: "Delete question" }).click();
+  await confirmDelete(teacher, card, "Delete question");
   for (const page of [teacher, asker, other]) await expect(question(page, open)).toHaveCount(0, SOON);
 
   // A learner has no instructor controls, and only the owner may delete.
   await expect(other.getByRole("button", { name: "Mark resolved" })).toHaveCount(0);
   await expect(other.getByLabel("Your answer")).toHaveCount(0);
   await expect(other.getByRole("button", { name: "Presenter mode" })).toHaveCount(0);
-  await question(asker, hidden).getByRole("button", { name: "Delete question" }).click();
+  await confirmDelete(asker, question(asker, hidden), "Delete question");
   await expect(question(teacher, hidden)).toHaveCount(0, SOON);
 
   // All of it came over the sockets: nobody polled, and B's frames never held the private text.

@@ -3,7 +3,7 @@
  * from the test's side only; the app has no switch for it.
  */
 import { expect, test, type Page } from "@playwright/test";
-import { classroom, question, unique, watchSnapshots, watchSockets } from "../room-support.ts";
+import { classroom, confirmDelete, question, unique, watchSnapshots, watchSockets } from "../room-support.ts";
 
 const ROOM_SOCKET = /\/api\/rooms\/[^/]+\/ws$/;
 const NOTICE = "โหมดสำรอง: อัปเดตประมาณทุก 30 วินาที รีเฟรชเพื่อดูทันที";
@@ -124,7 +124,7 @@ test("AC28: your own writes show at once, and an older snapshot cannot undo them
   // Delete while an earlier snapshot, which still has it, is on its way.
   release = await holdNextPoll();
   before = polls[0]!.length;
-  await question(learner, doomed).getByRole("button", { name: "Delete question" }).click();
+  await confirmDelete(learner, question(learner, doomed), "Delete question");
   await expect(question(learner, doomed)).toHaveCount(0, SOON);
   expect(polls[0]!.length).toBe(before);
   release();
@@ -147,9 +147,9 @@ test("AC28: your own writes show at once, and an older snapshot cannot undo them
   await expect(card.getByTestId("answer")).toContainText(reply, SOON);
   await card.getByRole("button", { name: "Mark resolved" }).click();
   await expect(card.getByTestId("resolved")).toBeVisible(SOON);
-  await card.getByRole("button", { name: "Delete answer" }).click();
+  await confirmDelete(teacher, card, "Delete answer");
   await expect(card.getByTestId("answer")).toHaveCount(0, SOON);
-  await card.getByRole("button", { name: "Delete question" }).click();
+  await confirmDelete(teacher, card, "Delete question");
   await expect(card).toHaveCount(0, SOON);
   // None of that waited for a poll.
   expect(polls[1]!.length - before).toBeLessThanOrEqual(1);
