@@ -12,5 +12,6 @@
     "resolveJsonModule": true,
     "types": ["node", "@cloudflare/vitest-plugin/types"]
   },
-  "include": ["worker-configuration.d.ts", "src", "test"]
+  "include": ["worker-configuration.d.ts", "src", "test"],
+  "exclude": ["src/client"]
 }
