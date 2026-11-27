@@ -319,6 +319,7 @@ library มี default ที่ขึ้นกับ `NODE_ENV` ซึ่งบ
 | `revokeSessionsOnPasswordReset` | `true` |
 | `resetPasswordTokenExpiresIn` | จาก config `RESET_LINK_TTL_SECONDS` ไม่ตั้ง = `86400` (24 ชม. ตาม N5) |
 | `session.cookieCache` | ปิด |
+| `advanced.database.validateSchema` | `false` (ค่า default ตรวจ schema ด้วย query เพิ่มราว 7 ครั้งและอ่านราว 60 แถวทุก request เพราะสร้าง auth ต่อ request วัดใน M0) schema ถูกคุมด้วย drift test ใน `pnpm test` แทน: `getMigrations(authOptions(env))` ต้องไม่มีตารางหรือ column ที่ต้องสร้างเพิ่ม |
 
 Test (AC22) assert ค่าที่ resolve แล้ว ทั้งใน test env และ env แบบ production โดยต้องรันเป็นคนละ process เพราะ library อ่าน `isProduction` เป็นค่าคงที่ตอน import ส่วน IP fallback เป็น localhost ใน test/dev ปิดด้วย option ไม่ได้ จึงตรวจด้วย AC18
 
@@ -388,7 +389,8 @@ Config เรื่องเวลา (var ไม่ใช่ secret) `createAut
 - Rate limit: `enabled: true` (7.0), `storage: "database"` (memory แยกกันต่อ isolate), `ipAddressHeaders: ["cf-connecting-ip"]`
 - **ต้องแก้ limit ของ sign-in/sign-up**: default คือ 3 ครั้ง/10 วินาที/IP ทั้งห้องเรียนที่ออก NAT เดียวกันจะติด ข้อเสนอ 60 ครั้ง/60 วินาที/IP
 - HTTP snapshot และ WS upgrade **ไม่จำกัดต่อ IP** (ทั้งห้องอาจใช้ IP เดียว) rate limit ของ Better Auth ทำงานใน router ของ `/api/auth/*` จึงไม่ครอบสอง path นี้ หน้าห้องใช้ `/api/me` ไม่เรียก `/get-session` ซ้ำ
-- HTTP snapshot จำกัด**ต่อ user** 30 ครั้ง/นาที/ห้อง (default: ปกติใช้ราว 2 ครั้ง/นาที/tab เผื่อ refresh และหลาย tab) นับใน memory ของ RoomDO ตอบ `429` + `Retry-After` ตัวนับหายเมื่อ DO ถูก evict ยอมรับได้
+- HTTP snapshot ไม่มีเพดานต่อ user (review R24): loop ของ client ถูกกันด้วยกฎ "request ค้างได้ครั้งละหนึ่ง นับรอบใหม่หลังได้คำตอบ" (8.6) และ AC27 นับจำนวน request ในช่วง 90 วินาที
+- ทุก response ของ `/api/*` ส่ง `X-Content-Type-Options: nosniff` ส่วน `Content-Type: application/json` ส่งเฉพาะ response ที่เป็น JSON (ไม่ใส่ใน `101` upgrade, `204` หรือ redirect ของ OAuth) (review R25)
 
 ## 8. Realtime protocol
 
@@ -454,7 +456,7 @@ Input ตรวจด้วย schema และ reject field ที่ไม่�
 
 | เรื่อง | พฤติกรรม |
 | --- | --- |
-| เข้าโหมด | ความพยายาม**ต่อ** WS error, ไม่ได้ `snapshot` ทาง WS ใน 3 วินาทีนับจากเปิดหน้าหรือ socket หลุด (รวมกรณีเปิดได้แต่เงียบ) หรือ `pong` หาย (8.2) การถูกปิดตามปกติ (`4001`) แล้วต่อใหม่ได้ใน 3 วินาทีไม่เข้าโหมด เมื่ออยู่ในโหมดแล้ว ความพยายามต่อที่ล้มเพิ่มไม่ทำให้ดึงเพิ่ม |
+| เข้าโหมด | socket ที่กำลังต่อ error **หรือถูกปิดด้วย code ใดก็ได้ก่อนได้ `snapshot` แรกของ socket นั้น** ยกเว้น `4003` ซึ่งทำตามแถว `404`/`4003` ด้านล่าง (spike M0: socket ที่ถูกบล็อกได้ `close` โดยไม่มี `error`), ไม่ได้ `snapshot` ทาง WS ใน 3 วินาทีนับจากเปิดหน้าหรือ socket หลุด (รวมกรณีเปิดได้แต่เงียบ) หรือ `pong` หาย (8.2) การถูกปิดตามปกติ (`4001`) แล้วต่อใหม่ได้ใน 3 วินาทีไม่เข้าโหมด เมื่ออยู่ในโหมดแล้ว ความพยายามต่อที่ล้มเพิ่มไม่ทำให้ดึงเพิ่ม |
 | การดึง | `GET .../snapshot` **ทันที**หนึ่งครั้ง แล้วทุก 30 วินาที + สุ่ม 0 ถึง 5 วินาที มี request ค้างได้ครั้งละหนึ่ง นับรอบใหม่หลังได้คำตอบ หยุดเมื่อ tab ซ่อน และดึงทันทีเมื่อกลับมา |
 | Refresh หน้า | กฎเดียวกัน จึงเห็นข้อมูลปัจจุบันภายในไม่กี่วินาที ไม่ต้องรอรอบ 30 วินาที |
 | ผลลัพธ์ | รูปเดียวกับ message `snapshot` ใช้**แทนที่** state ทั้งหมด presenter mode กรองตอน render จึงใช้เหมือนกัน |
@@ -496,12 +498,12 @@ Input ตรวจด้วย schema และ reject field ที่ไม่�
 | AC14 | พิสูจน์ว่า eviction เกิดจริง (instance marker ใน memory เปลี่ยน อ่านด้วย `runInDurableObject`) และ socket เดิมรอดแบบ hibernate (`webSockets` option ค่า default) แล้วยังได้ event โดยกฎสิทธิ์ยังถูก | Auto |
 | AC15 | ลิงก์ที่ admin API คืนมาตั้งรหัสได้จริง, ใช้ครั้งเดียว, หมดอายุแล้วใช้ไม่ได้, ลิงก์เก่าตายเมื่อสร้างใหม่ (ลิงก์ใหม่ใช้ได้), session เดิมใช้ไม่ได้, socket ที่เคยได้ event ถูกปิด, สร้างให้ instructor ไม่ได้, `/request-password-reset` และ `GET /reset-password/:token` ได้ `404`, มี audit row. การหมดอายุ: ตั้ง `RESET_LINK_TTL_SECONDS` เป็นไม่กี่วินาทีแล้วรอจริง. Control: ภายใต้ config เดียวกัน ลิงก์ที่ใช้ก่อนหมดอายุสำเร็จ | Auto, Manual |
 | AC16 | Session ที่ revoke แล้วต่อ socket ใหม่ไม่ได้ และ socket ที่เลย `validUntil` ไม่ได้ event. Control: socket นั้นได้ event ก่อน revoke และ session ที่สองของ user เดียวกันยังได้หลังจากนั้น. client logout ปิด socket ทุก tab. การหมดอายุ: ตั้ง `SOCKET_MAX_LIFETIME_SECONDS` เป็นไม่กี่วินาทีแล้วรอจริง. Control: socket นั้นได้ event ก่อนหมดอายุ และ socket ที่ต่อใหม่ในรอบเดียวกันได้ event ที่ socket หมดอายุไม่ได้. HTTP snapshot: session ที่ revoke แล้วได้ `401` ในการเรียกถัดไป (control: ได้ `200` ก่อน revoke และ session ที่สองยังได้ `200`) | Auto |
-| AC17 | `/api/auth/*`, write และ WS upgrade จาก `Origin` อื่นถูกปฏิเสธโดย middleware ของเรา. Control: request เดียวกันด้วย Origin ถูกต้องสำเร็จ รันโดย `disableOriginCheck: false`. HTTP snapshot ไม่มี header `Access-Control-Allow-Origin` เมื่อส่ง `Origin` อื่น (control: same-origin ที่ไม่มี `Origin` ได้ `200`) | Auto |
+| AC17 | `/api/auth/*`, write และ WS upgrade จาก `Origin` อื่นถูกปฏิเสธโดย middleware ของเรา. Control: request เดียวกันด้วย Origin ถูกต้องสำเร็จ รันโดย `disableOriginCheck: false`. HTTP snapshot ไม่มี header `Access-Control-Allow-Origin` เมื่อส่ง `Origin` อื่น (control: same-origin ที่ไม่มี `Origin` ได้ `200`) และมี `X-Content-Type-Options: nosniff` กับ `Content-Type: application/json` (R25) | Auto |
 | AC18 | ส่ง `cf-connecting-ip` สองค่าต่างกันแล้วได้ bucket แยกกัน, ค่าเดียวได้ `429` ที่ครั้งที่ limit+1 ขณะอีกค่ายังผ่าน, sign-in 50 ครั้งจาก IP เดียวใน 1 นาทีผ่าน | Auto |
 | AC19 | ข้อความที่มี HTML/script แสดงเป็นตัวอักษร | Auto |
 | AC20 | Clone ใหม่ ทำตาม README แล้ว `pnpm test` และ dev รันได้ บนสภาพที่ `wrangler whoami` แสดงว่าไม่ได้ authenticated (ใช้ HOME แยก ไม่มี `CLOUDFLARE_API_TOKEN`) | Manual |
 | AC21 | Presenter mode เปิด: private marker และชื่อที่ผูกกับคำถามนั้นไม่อยู่ใน DOM รวมข้อที่เข้ามาหลังเปิดและหลัง reload (ใช้ผู้ถามที่ไม่มี public question เพื่อให้ตรวจชื่อได้). Control: public marker อยู่ใน DOM และปิดโหมดแล้ว private กลับมาพร้อมชื่อและรูปแบบที่ต่างจาก public | Auto (browser) |
-| AC22 | Options ที่ resolve จาก `createAuth(env)` ตรงตาราง 7.0 ทั้ง test env และ env แบบ production, secret ขาดแล้ว fail (มี secret แล้วผ่าน), password hash ที่เก็บมี prefix, ไม่ตั้ง config เวลาแล้วได้ `86400` และ `900`, ค่าที่ตั้งมีผลจริง, ค่าผิดรูปหรือนอกช่วง fail, ไม่ตั้ง `INSTRUCTOR_EMAILS` แล้ว fail ส่วนค่าว่างผ่าน, list ที่มีรายการผิดรูปแม้รายการเดียว fail ทั้ง list (control: list ที่ถูกทั้งหมด รวมตัวพิมพ์ใหญ่และช่องว่างรอบ comma ผ่าน) | Auto |
+| AC22 | Options ที่ resolve จาก `createAuth(env)` ตรงตาราง 7.0 ทั้ง test env และ env แบบ production, secret ขาดแล้ว fail (มี secret แล้วผ่าน), password hash ที่เก็บมี prefix, ไม่ตั้ง config เวลาแล้วได้ `86400` และ `900`, ค่าที่ตั้งมีผลจริง, ค่าผิดรูปหรือนอกช่วง fail, ไม่ตั้ง `INSTRUCTOR_EMAILS` แล้ว fail ส่วนค่าว่างผ่าน, list ที่มีรายการผิดรูปแม้รายการเดียว fail ทั้ง list (control: list ที่ถูกทั้งหมด รวมตัวพิมพ์ใหญ่และช่องว่างรอบ comma ผ่าน), `advanced.database.validateSchema` เป็น `false` และ drift test: `getMigrations` กับ D1 ที่ apply migration แล้วไม่มีอะไรต้องสร้างหรือเพิ่ม (ต้องเคยแดงเมื่อ migration ขาด column) | Auto |
 | AC23 | `GET /api/version` คืน SHA ตรงกับ commit ที่ build | Auto |
 | AC24 | Check ความเป็นเจ้าของบัญชีผู้สอน (N7): ผ่านเมื่อทุก email ใน list มีบัญชีและเจ้าของ login แล้วได้ role ผู้สอน ต้องเคยเห็นแดงใน local สองกรณี: email ใน list ที่ไม่มีบัญชี และบัญชีที่คนอื่นสมัครไว้ก่อน (เจ้าของ login ไม่ได้) | Auto + Manual (local และหลัง deploy) |
 | AC25 | Load check บน Workers Paid (หลัง deploy) ตามส่วน 14: ทุก request สำเร็จ ไม่มี `429`, `exceededCpu`, `1102` หรือ exceeded memory, บันทึก p99 CPU ms และ p99 wall time (p99 wall เกิน 5 วินาทีให้รายงาน Mild เป็นข้อสังเกต ไม่ใช่ fail), hash ที่เก็บยังมี prefix และ parameter ตาม 7.1 ไม่ผ่านให้หยุดและรายงาน Mild โดยไม่แก้ hash | Manual (deploy) |
@@ -509,7 +511,7 @@ Input ตรวจด้วย schema และ reject field ที่ไม่�
 | AC27 | **WebSocket ถูกบล็อกตั้งแต่เปิดหน้า** (Playwright ดัก WS): B เห็นข้อมูลเดิมภายใน 5 วินาที มีตัวบอกโหมดสำรอง และ public question ใหม่ของ A ปรากฏเองภายใน 40 วินาทีโดยไม่ refresh, private ของ A ไม่ปรากฏ, refresh แล้วเห็นข้อมูลล่าสุดภายใน 5 วินาที, ในช่วง 90 วินาทีที่ไม่มีการ refresh มี snapshot request 2 ถึง 4 ครั้ง. ทำซ้ำกรณี socket เปิดได้แต่เงียบ. Control: ยืนยันว่า page ไม่ได้ frame WS เลย และ test ต้องเคยแดงเมื่อปิด polling | Auto (browser), Manual |
 | AC28 | โหมดสำรอง: โพสต์ ตอบ resolve ลบ ของตัวเองเห็นบนจอผู้ทำภายใน 2 วินาทีโดยไม่รอรอบ poll และเมื่อหน่วง snapshot ที่เริ่มก่อน write แล้วปล่อยทีหลัง รายการที่เพิ่งเขียนไม่หาย (ที่ลบไม่กลับมา). Control: snapshot รอบถัดไปถูกใช้ตามปกติ | Auto (browser) |
 | AC29 | เลิกบล็อก WS: ภายใน 40 วินาทีตัวบอกโหมดสำรองหาย ไม่มี snapshot request อีกในช่วง 70 วินาทีต่อมา และ event ใหม่มาถึงภายใน 2 วินาที. Control: ก่อนเลิกบล็อกมี snapshot request | Auto (browser) |
-| AC30 | 50 user จาก `cf-connecting-ip` เดียวกัน poll ตามรอบปกติได้ `200` ทั้งหมด, user หนึ่งยิงเกิน 30 ครั้ง/นาทีได้ `429` พร้อม `Retry-After` ขณะ user อื่น IP เดียวกันยังได้ `200` | Auto |
+| AC30 | 50 user จาก `cf-connecting-ip` เดียวกัน poll ตามรอบปกติได้ `200` ทั้งหมด (เพดานต่อ user ตัดออกตาม review R24) | Auto |
 
 ## 10. Local dev และ local acceptance (ไม่ deploy)
 
@@ -517,8 +519,8 @@ Input ตรวจด้วย schema และ reject field ที่ไม่�
 - Node `>=22.12` (wrangler 4.168.0 กำหนด, เครื่องนี้มี 22.22.1), pnpm
 - `vite dev` + `@cloudflare/vite-plugin`: รันบน `workerd` ผ่าน Miniflare, D1 และ DO จำลองบนเครื่อง
 - Hibernation จำลองใน local ได้ตั้งแต่ wrangler 3.13.2
-- Test: Vitest + `@cloudflare/vitest-pool-workers` (ต้องใช้ Vitest `^4.1`), E2E ใน local ด้วย Playwright หลาย browser context
-- โหมดสำรอง: กฎ visibility ทดสอบที่ API (เร็ว) ส่วนพฤติกรรม client (AC27 ถึง AC29) บล็อก WS จากฝั่ง test ด้วย Playwright (`routeWebSocket`, **ยังไม่ได้พิสูจน์ใน project นี้**) และรอเวลาจริง ชุดนี้จึงเพิ่มเวลารัน test หลายนาที ไม่มี switch ปิด WS ใน production code
+- Test: Vitest + `@cloudflare/vitest-plugin` (ชื่อใหม่ของ `@cloudflare/vitest-pool-workers` ซึ่ง npm ประกาศ deprecated ว่า "has been renamed to @cloudflare/vitest-plugin"; ต้องใช้ Vitest `^4.1`), E2E ใน local ด้วย Playwright หลาย browser context
+- โหมดสำรอง: กฎ visibility ทดสอบที่ API (เร็ว) ส่วนพฤติกรรม client (AC27 ถึง AC29) บล็อก WS จากฝั่ง test ด้วย Playwright (`routeWebSocket` พิสูจน์ใน spike M0 แล้วทั้งแบบต่อไม่ได้และแบบเปิดได้แต่เงียบ กับ server จำลอง ยังไม่ได้รันกับ app จริง) และรอเวลาจริง ชุดนี้จึงเพิ่มเวลารัน test หลายนาที แยกเป็น Playwright project ช้าที่รันตอน gate ของ milestone และก่อน G1 ส่วน `pnpm test` ยังเร็ว มี script gate ตัวเดียวที่รันทุก check (review R26) ไม่มี switch ปิด WS หรือย่นรอบ poll ใน production code
 - ให้ Mild ลองเอง: script Playwright แบบ headed ที่เปิด browser โดยบล็อก WS (ส่งมอบใน M5)
 - ข้อจำกัดที่เอกสารระบุ: DO WebSocket ใช้กับ per-file storage isolation ไม่ได้ ต้องรัน `--max-workers=1 --no-isolate` และแยก room ต่อ test
 
@@ -630,7 +632,7 @@ CPU limit และ memory ของ password hashing (ถือว่า local 
 - `--var KEY:` ได้ค่าเป็น string ว่าง, `wrangler secret put` ตัดช่องว่างท้ายและไม่ปฏิเสธค่าว่างก่อนส่ง API (พฤติกรรมของ API กับค่าว่างไม่ทราบ จึงไม่เลือกใช้ secret)
 
 ### ยังไม่ได้ตรวจ / เป็นการอนุมาน
-- ไม่มีการรันโค้ดใด ๆ: Better Auth + D1 บน Workers ยังไม่เคยพิสูจน์ใน project นี้
+- M0 (2026-11-27) รัน Better Auth + D1 + RoomDO บน `workerd` local แล้ว (ส่วน 14 "วัดใน M0") ส่วนบน Cloudflare จริงยังไม่เคยรัน
 - เวลา CPU ของ scrypt บน `workerd` และบน production, การนับ memory ของมัน (วัดแล้วเฉพาะ Node บนเครื่องนี้ ส่วน 14)
 - Local บังคับ CPU limit หรือไม่ (เอกสารที่อ่านไม่ระบุ)
 - การใช้ local ได้โดยไม่มี Cloudflare account (อนุมานจากเอกสาร local dev, ตรวจด้วย AC20)
@@ -638,7 +640,7 @@ CPU limit และ memory ของ password hashing (ถือว่า local 
 - การฉีด commit SHA ตอน build, การกู้รหัสผู้สอนด้วยการเขียน `verification`, `rowsRead`/`rowsWritten` ที่ใช้นับใน local
 - version และการตั้งค่าร่วมกันของ Tailwind CSS, shadcn/ui, React Router กับ Vite และ Cloudflare plugin
 - `new_sqlite_classes`, static assets + SPA routing, การ mount Better Auth ใน Hono, rate limit ของ `/api/join`, foreign key ใน DO SQLite
-- Playwright `routeWebSocket` สำหรับบล็อก WS, การคิดเงินของ `ping`, CPU ต่อ snapshot
+- Playwright `routeWebSocket` กับ app จริง (spike M0 พิสูจน์กับ server จำลองแล้ว), การคิดเงินของ `ping`, CPU ต่อ snapshot
 - ผลของ `--var` ค่าว่างบน Cloudflare จริง และการใช้ `--var` กับ config ที่ Vite plugin สร้าง
 
 ## 14. Workers Paid (DEC-3): ข้อจำกัด ค่าใช้จ่าย และ load check
@@ -695,6 +697,26 @@ Subrequest ข้อความจากหน้า limits: "Subrequests per i
 - **Cost cap:** ทุกชุดอยู่ใต้ N*r*p 2^20 ใน source ของ `workerd` production อาจต่างออกไป (ยังไม่ยืนยัน)
 - **Memory:** Paid ไม่ได้เพิ่ม จาก source คาดว่า hash ใน isolate เดียวทำทีละครั้งจึงไม่ซ้อนกัน (อนุมาน) และการนับ memory ของ native scrypt ยังไม่ทราบ
 - **Latency:** ถ้าทำทีละครั้งจริง sign-in พร้อมกัน 30 คนใน isolate เดียวจะรอคิวได้ถึงหลักวินาที (อนุมานจากเวลาบนเครื่องนี้) จึงบันทึก wall time ด้วย
+
+### วัดใน M0 (local `workerd`, เครื่องเดียวกัน, 2026-11-27)
+
+ตัวเลขของเครื่องนี้กับ database ที่เกือบว่าง ไม่ใช่ของ Cloudflare test: `test/measurements.test.ts` (director รันซ้ำจาก clone ใหม่ได้ค่าใกล้กัน)
+
+- Hash ด้วย `@better-auth/utils/password` (native `node:crypto` scrypt, N=16384 r=16 p=1) ใน `workerd`: **wall time median ราว 72 ถึง 78 ms ต่อ hash** (20 ครั้ง, verify ใกล้กัน) เป็น wall time ไม่ใช่ CPU time และ local ไม่ enforce CPU ตัวเลข 105 ms ด้านบนยังเป็นตัวประมาณ CPU ที่ใช้คิดโควตา pure JS fallback ช้ากว่ามาก (test ที่บังคับใช้ pure JS เกิน 60 วินาทีสำหรับ 60 hash)
+- D1 ต่อ request เมื่อ `advanced.database.validateSchema: false` (7.0) `rowsRead`/`rowsWritten` มาจาก metadata ของ D1 local (ถือว่าเทียบกับการคิดเงินได้ แต่ยังไม่ยืนยัน):
+
+| Request | Queries | Rows read | Rows written |
+| --- | --- | --- | --- |
+| route ที่ไม่มี (control) | 0 | 0 | 0 |
+| sign-up | 6 | 4 | 13 |
+| `GET /api/me` มี session | 2 | 2 | 0 |
+| `GET /api/me` ไม่มี session | 0 | 0 | 0 |
+| sign-out | 7 | 6 | 4 |
+| sign-in | 5 | 4 ถึง 7 | 5 ถึง 7 |
+| sign-in รหัสผิด | 4 | 6 | 1 |
+
+  ถ้าเปิด `validateSchema` (default) ทุก request ที่ผ่าน Better Auth เพิ่มราว 8 query และอ่านราว 60 แถว
+- แถวของ DO SQLite ต่อ operation และ CPU ต่อ snapshot: วัดใน M3 (M0 ยังไม่มีข้อมูลใน RoomDO)
 
 ### ตรวจอะไรได้ที่ไหน
 

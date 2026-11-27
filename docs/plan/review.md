@@ -271,3 +271,34 @@ and line 5 with:
 ### Verified versus accepted this round
 
 Verified: the spec text listed above against Mild's two quotes; that all three exits use one filter (§4 principle 2, 6.2); the arithmetic of the polling estimate (50 users x up to 120 polls/hour x 2 hours = 12,000 polls per class). Accepted from the builder: that Playwright `routeWebSocket` can block both failure shapes (unproven in this project; M0 item 7 proves it), the DO duration and row figures in §14, and that auto-responded pings are billed as stated (the builder marks this unconfirmed).
+
+## Round 7: M0 verification and the builder's proposals (2026-11-27)
+
+Director (stand-in session for Clara's director) re-ran M0 from a fresh local clone of `feat/v1` at `079a0dc` (`pnpm install --frozen-lockfile`, no `.dev.vars`, no Cloudflare login).
+
+### Verdict: M0 PASS
+
+| Item | Result | Evidence |
+| --- | --- | --- |
+| (1) native scrypt in the real bundle, sign-up/sign-in in workerd, wall time | PASS | `pnpm build && pnpm check:bundle`: "OK: native node:crypto scrypt only"; check goes red (4 FAIL lines) when Vite aliases the pure JS module. The built `dist/handsup` served by `vite preview` (workerd): sign-up 200, `/api/me` role instructor, wrong password 401, right password 200. Tests: median 72 to 78 ms per hash; forcing pure JS in the test times out at 60 s |
+| (2) accounts through the real sign-up API, no seeded session | PASS | `test/accounts.test.ts` drives `exports.default.fetch`; breaking the sign-up path turns 5 tests red (404) |
+| (3) eviction really happens, same socket still receives | PASS | Removing `evictDurableObject` turns the marker assertion red; replacing `ctx.acceptWebSocket` with `server.accept()` turns both room tests red |
+| (4) mock OAuth for AC5 | PASS, with a finding | Real redirect flow with only Google's token endpoint replaced. Red when linking is fully enabled (`trustedProviders` + `requireLocalEmailVerified: false`); **stays green with `trustedProviders` alone**, so the refusal rests on the `requireLocalEmailVerified` default and `emailVerified=false` (matches §7.2 N1). Deferral added in plan §5 |
+| (5) short time limits for some tests, defaults for others | PASS | Separate `short-ttl` Vitest project; each of socket TTL ignored, reset TTL ignored, and a short default turns the matching test red |
+| (6) §14 numbers | PASS for hash and D1; DO rows moved to M3 (accepted) | `MEASURE` output recorded in §14 "วัดใน M0" |
+| (7) Playwright blocks WS both ways with a control | PASS (against a stand-in server, not the app) | 3 spikes pass; letting either blocked page connect turns its test red |
+
+Also: `pnpm typecheck` exit 0; `pnpm test` 30/30 across 6 files.
+
+### Rulings on the builder's proposals
+
+| Proposal | Ruling | Reason |
+| --- | --- | --- |
+| `@cloudflare/vitest-plugin` instead of `vitest-pool-workers` | Accept | npm marks the old package deprecated: "renamed to @cloudflare/vitest-plugin"; code already uses 1.9.2 |
+| `advanced.database.validateSchema: false` + drift test, in AC22 | Accept | Measured: removes about 8 queries and about 60 row reads from every auth request; the drift test already exists and goes red when the migration lacks a column |
+| §8.6 enter fallback on any close or error before the first snapshot | Accept, modified | The spike showed a blocked socket closes with no `error` event; exclude `4003`, which has its own row |
+| §14 add workerd hash time and D1 table | Accept | Added, labelled as local wall time on this machine, not CPU |
+| DO row counts to M3 | Accept | RoomDO holds no data in M0; M3 row now names the operations to measure |
+| R24 drop per-user snapshot cap | Accept | §7.6 and AC30 edited |
+| R25 JSON content type only on JSON responses | Accept | `nosniff` stays on every `/api/*` response; a JSON content type on `101`/`204`/redirects would be wrong |
+| R26 slow Playwright project + one gate script | Accept | Keeps `pnpm test` fast; the gate script is also the one command for milestone checks |
