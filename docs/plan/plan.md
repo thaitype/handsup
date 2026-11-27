@@ -42,7 +42,7 @@ Done when: Mild ใช้งานบน local เองแล้วพิมพ
 
 ### 1.2.1 กติกา branch และ commit (M0 ถึง M5)
 
-- builder ทำงานใน `/home/thw-home/gits/handsup` เท่านั้น บน branch `feat/v1` ที่แตกจาก `main` (`main` ตอนนี้มีแค่ README) ห้าม commit ลง `main`
+- builder ทำงานใน repo `handsup` เท่านั้น บน branch `feat/v1` ที่แตกจาก `main` (`main` ตอนนี้มีแค่ README) ห้าม commit ลง `main`
 - commit แบบ local เท่านั้น หนึ่ง commit ต่อหนึ่ง increment ที่ test ผ่านแล้ว ข้อความ commit บอกว่าผ่าน AC ไหน และลงท้ายด้วยบรรทัด attribution ตามที่ระบบกำหนด
 - commit แรกของ branch: `docs/spec/` (draft ต้นฉบับและ spec ฉบับที่ผ่าน review) และ `docs/plan/` ตามที่เป็นอยู่ เพื่อให้มี baseline ที่อ้างอิงได้
 - builder ห้ามแก้ `docs/plan/` (เป็นของ director) และห้ามแก้ `docs/spec/realtime-forum-spec.original.md` การเปลี่ยน spec ระหว่าง build ทำเป็นข้อเสนอส่งผ่าน Clara แล้ว director ตรวจก่อน
