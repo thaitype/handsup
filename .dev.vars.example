@@ -1,0 +1,8 @@
+# Copy to .dev.vars (gitignored). Never commit real values.
+# Generate with: openssl rand -base64 32
+BETTER_AUTH_SECRET=
+BETTER_AUTH_URL=http://localhost:5173
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+# Comma separated. Empty means nobody is an instructor.
+INSTRUCTOR_EMAILS=
