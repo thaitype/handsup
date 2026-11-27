@@ -355,3 +355,28 @@ Director re-ran M2 from a fresh local clone of `feat/v1` at `1c577ea` (`pnpm ins
 | shadcn components hand-written, `lucide-react` dropped, exact pins | Accept | shadcn components are copied code anyway; fewer dependencies |
 | `HANDSUP_E2E_DIR` env hook in `vite.config.ts` | Accept only with a guard | Verified hazard above; dev-only, `vite build` must throw |
 | `Cache-Control: no-store` on `/api/*` (6.2) | M3, first increment | `/api/rooms` already returns invite codes to instructors |
+
+## Round 10: M3 Increment 0 verification (2026-11-27)
+
+Director (Clara's engineer-director, resumed after the freya handback) re-ran Increment 0 from a fresh local clone of `feat/v1` at `5113e4f` in a `/home` work folder with `TMPDIR` there (`pnpm install --frozen-lockfile`, no `.dev.vars`, no Cloudflare login). Commits read: `0ff4a4a`, `b395cfc`, `3ea7174`, `5113e4f` (7 files, +124 −15).
+
+### Verdict: Increment 0 PASS (4/4)
+
+Baseline: `pnpm typecheck` exit 0; `pnpm test` **123 passed** (16 files); `pnpm build` exit 0; `pnpm check:bundle` "OK: native node:crypto scrypt only"; `pnpm test:e2e:spikes` 3 passed; `pnpm test:e2e:app` 6 passed.
+
+| Item | Result | Break that turned it red (each reverted) |
+| --- | --- | --- |
+| 1. Write gate test asserts our body on auth routes, form sign-in case (`0ff4a4a`) | PASS | Gate skipped for `/api/auth/*`: both gate tests red (the `sign-out` body assertion and the form-encoded `sign-in/email`) |
+| 2. `vite build` refuses `HANDSUP_E2E_DIR`; `check:bundle` rejects baked vars (`b395cfc`) | PASS, two layers | With the guard: build exit 1 "refusing to build with the e2e config". Guard removed: build exit 0 and `dist/handsup/wrangler.json` carries `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `INSTRUCTOR_EMAILS`; `check:bundle` then exits 1 naming all five. Bundle rule also removed: exits 0. A clean build has `vars: []` |
+| 3. `Cache-Control: no-store` on every `/api/*` response (`3ea7174`) | PASS | Header removed: the 11-response sample test red. Header applied to every path: the outside-`/api/` control test red. The sample covers 200, 302, 400, 401, 403, 404 and 415 |
+| 4. Sign-out clears the waiting join code (`5113e4f`) | PASS | `pendingJoin.clear()` removed: the browser test red with the code still in `sessionStorage` |
+
+No stray processes: none running from any `handsup` directory before or after the runs. The repo working tree stayed clean at `5113e4f`.
+
+### Consequence for M6 (plan amended)
+
+`check:bundle` now rejects any var in the deployable config. Plan §4.2 item 4 said `wrangler.jsonc` carries `BETTER_AUTH_URL`; that build would fail the gate. Plan §4.1, 4.2 and 4.3 now pass `BETTER_AUTH_URL` with `--var` alongside `INSTRUCTOR_EMAILS` and keep `vars` out of `wrangler.jsonc` entirely. Forgetting it fails closed (missing env refuses to start, spec 4 principle 6).
+
+### M3 brief
+
+Confirmed with amendments, now at `docs/plan/m3-brief.md`: increments ordered so the leak canary runs on the two HTTP channels before any WS or UI code; N5 write rules (length, post rate, room cap with a count-free error) assigned to M3, since no milestone owned them; the M3 parts of AC16 and AC17 spelled out; the gate script must exit non-zero on any failure.
