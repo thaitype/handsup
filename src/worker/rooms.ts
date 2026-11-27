@@ -2,6 +2,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { errorResponse, readBody, viewerOf, type AppEnv } from "./http.ts";
+import { takeAttempt } from "./attempts.ts";
 import { generateInviteCode, normalizeInviteCode } from "./invite-code.ts";
 
 export const JOIN_LIMIT = 10;
@@ -14,23 +15,8 @@ const joinBody = z.strictObject({ code: z.string().max(64) });
 type RoomRow = { id: string; name: string; invite_code: string; created_at: number };
 
 /** Counts one join attempt for the user. False once they are over the limit in this window. */
-export async function takeJoinAttempt(db: D1Database, userId: string, now: number) {
-  const row = await db
-    .prepare(
-      `insert into join_attempt (user_id, window_start, count) values (?1, ?2, 1)
-       on conflict (user_id) do update set
-         count = case when window_start <= ?2 - ?3 then 1 else count + 1 end,
-         window_start = case when window_start <= ?2 - ?3 then ?2 else window_start end
-       returning count, window_start`,
-    )
-    .bind(userId, now, JOIN_WINDOW_MS)
-    .first<{ count: number; window_start: number }>();
-  if (!row) throw new Error("join_attempt upsert returned no row");
-  return {
-    allowed: row.count <= JOIN_LIMIT,
-    retryAfterSeconds: Math.max(1, Math.ceil((row.window_start + JOIN_WINDOW_MS - now) / 1000)),
-  };
-}
+export const takeJoinAttempt = (db: D1Database, userId: string, now: number) =>
+  takeAttempt(db, "join_attempt", userId, now, JOIN_LIMIT, JOIN_WINDOW_MS);
 
 /** Inserts with a fresh code, trying again on the (unlikely) clash with an existing one. */
 async function withFreshCode<T>(attempt: (code: string) => Promise<T>): Promise<T> {

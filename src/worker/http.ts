@@ -7,7 +7,7 @@ import { roleOf, type Role } from "./role.ts";
 export type AppEnv = { Bindings: Env };
 export type Viewer = { id: string; name: string; email: string; role: Role };
 
-export const errorResponse = (c: Context, status: 400 | 401 | 403 | 404 | 415 | 429, error: string) =>
+export const errorResponse = (c: Context, status: 400 | 401 | 403 | 404 | 409 | 415 | 429, error: string) =>
   c.json({ error }, status);
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);

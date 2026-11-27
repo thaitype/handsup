@@ -1,6 +1,7 @@
 import { Hono, type Context } from "hono";
 import { createAuth } from "./auth.ts";
 import { viewerOf, writeGate, type AppEnv } from "./http.ts";
+import { questions } from "./questions.ts";
 import { rooms } from "./rooms.ts";
 
 export { RoomDO } from "./room-do.ts";
@@ -53,6 +54,7 @@ app.get("/api/me", async (c) => {
 });
 
 app.route("/", rooms);
+app.route("/", questions);
 
 app.all("/api/*", notFound);
 
