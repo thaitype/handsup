@@ -14,6 +14,7 @@ const placeholderEnv = {
   BETTER_AUTH_SECRET: "schema-generation-only-not-a-real-secret",
   GOOGLE_CLIENT_ID: "unused",
   GOOGLE_CLIENT_SECRET: "unused",
+  INSTRUCTOR_EMAILS: "",
 };
 const { compileMigrations } = await getMigrations(
   authOptions(placeholderEnv, new DatabaseSync(":memory:")),

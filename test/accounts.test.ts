@@ -2,6 +2,7 @@ import { getMigrations } from "better-auth/db/migration";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { authOptions } from "../src/worker/auth.ts";
+import { instructorEmails } from "../src/worker/config.ts";
 import { roleOf } from "../src/worker/role.ts";
 import { Browser, uniqueEmail } from "./support/http.ts";
 
@@ -62,6 +63,33 @@ describe("instructor list", () => {
     expect(roleOf(withList("teacher@example.test"), "teacher@example.test")).toBe("instructor");
     expect(roleOf(withList(""), "teacher@example.test")).toBe("learner");
     expect(() => roleOf(withList(undefined), "teacher@example.test")).toThrow("INSTRUCTOR_EMAILS");
+  });
+
+  it("accepts a valid list with capitals and spaces around commas", () => {
+    expect([...instructorEmails(withList(" A@Example.test ,b@EXAMPLE.test,  c.d@example.test"))]).toEqual([
+      "a@example.test",
+      "b@example.test",
+      "c.d@example.test",
+    ]);
+  });
+
+  it.each([
+    ["a stray trailing comma", "a@example.test,"],
+    ["an empty entry in the middle", "a@example.test,,b@example.test"],
+    ["only spaces", "   "],
+    ["a name without a domain", "a@example.test,teacher"],
+    ["a missing local part", "@example.test,b@example.test"],
+    ["two addresses without a comma", "a@example.test b@example.test"],
+    ["a semicolon separator", "a@example.test;b@example.test"],
+  ])("rejects the whole list for %s", (_, list) => {
+    // Control in the same test: the valid entries alone are accepted.
+    const valid = list
+      .split(/[,; ]/)
+      .map((entry) => entry.trim())
+      .filter((entry) => /^[^@\s]+@[^@\s]+$/.test(entry));
+    expect(instructorEmails(withList(valid.join(","))).size).toBe(valid.length);
+    expect(() => instructorEmails(withList(list))).toThrow("INSTRUCTOR_EMAILS");
+    expect(() => roleOf(withList(list), valid[0] ?? "a@example.test")).toThrow("INSTRUCTOR_EMAILS");
   });
 });
 

@@ -1,4 +1,5 @@
 /** Reads configuration from the Worker env. A bad value throws; nothing falls back silently. */
+import { z } from "zod";
 
 type RequiredVar =
   | "BETTER_AUTH_SECRET"
@@ -12,17 +13,35 @@ export function requireVar(env: Env, name: RequiredVar): string {
   return value;
 }
 
-/** Defined-but-empty is valid (nobody is an instructor). A missing binding is not. */
+const MIN_SECRET_LENGTH = 32;
+
+/** Spec 7.0: the library only rejects its default secret in production, so we check ourselves. */
+export function authSecret(env: Env): string {
+  const secret = requireVar(env, "BETTER_AUTH_SECRET");
+  if (secret.length < MIN_SECRET_LENGTH) {
+    throw new Error(`BETTER_AUTH_SECRET must be at least ${MIN_SECRET_LENGTH} characters`);
+  }
+  return secret;
+}
+
+// The same email rule Better Auth applies to sign-up (spec 7.3).
+const email = z.email();
+
+/**
+ * Spec 7.3. Defined-but-empty is valid (nobody is an instructor); a missing binding is not.
+ * One malformed entry, including an empty one from a stray comma, rejects the whole list.
+ */
 export function instructorEmails(env: Env): ReadonlySet<string> {
   const raw: string | undefined = env.INSTRUCTOR_EMAILS;
   if (raw === undefined) throw new Error("Missing required variable INSTRUCTOR_EMAILS");
-  // M1 adds per-entry email validation that rejects the whole list (spec 7.3).
-  return new Set(
-    raw
-      .split(",")
-      .map((entry) => entry.trim().toLowerCase())
-      .filter(Boolean),
-  );
+  if (raw === "") return new Set();
+  const entries = raw.split(",").map((entry) => entry.trim().toLowerCase());
+  const bad = entries.filter((entry) => !email.safeParse(entry).success).length;
+  if (bad > 0) {
+    // The values are not echoed: the list is configuration, not something to put in logs.
+    throw new Error(`INSTRUCTOR_EMAILS has ${bad} invalid entr${bad === 1 ? "y" : "ies"}`);
+  }
+  return new Set(entries);
 }
 
 function seconds(name: string, raw: string | undefined, fallback: number, max: number): number {
