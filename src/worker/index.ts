@@ -29,11 +29,13 @@ const app = new Hono<AppEnv>();
 /** Statuses that carry no JSON body. Better Auth still labels its redirects as JSON. */
 const hasNoBody = (status: number) => status === 101 || status === 204 || (status >= 300 && status < 400);
 
-// Spec 7.6 (R25): nosniff on every /api/ response, whoever built it, and a JSON content
-// type only where there is a JSON body. JSON responses set their own type.
+// Spec 7.6 (R25) and 6.2: nosniff and no-store on every /api/ response, whoever built it,
+// and a JSON content type only where there is a JSON body. JSON responses set their own type.
 app.use("/api/*", async (c, next) => {
   await next();
   c.res.headers.set("X-Content-Type-Options", "nosniff");
+  // Spec 6.2: nothing under /api/ is cached, invite codes and sessions included.
+  c.res.headers.set("Cache-Control", "no-store");
   if (hasNoBody(c.res.status)) c.res.headers.delete("Content-Type");
 });
 
