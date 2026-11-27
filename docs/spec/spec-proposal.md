@@ -225,6 +225,7 @@ RoomDO (1 ต่อ room, SQLite): question, answer
 | `user`, `session`, `account`, `verification`, `rateLimit` | ตาม schema ที่ Better Auth generate (ไม่มี column role) |
 | `room` | `id` (UUID) PK, `name`, `invite_code` UNIQUE, `created_by`, `created_at` |
 | `room_member` | `room_id`, `user_id`, `joined_at`, PK(`room_id`,`user_id`), index(`user_id`) |
+| `join_attempt` | `user_id` PK, `window_start`, `count` ตัวนับ rate limit ของ `/api/join` ต่อ user แบบ window คงที่ 1 นาที (7.5) |
 | `reset_audit` | `id`, `actor_user_id`, `target_user_id`, `created_at` (ไม่เก็บ token) ผู้อ่าน: operator ผ่าน query "ใคร reset ใคร" ใน `docs/runbook` (ส่งมอบใน M5) |
 
 Role **ไม่เก็บใน DB** คำนวณจาก env ทุกครั้ง (7.3) แก้ list แล้วมีผลโดยไม่ต้อง migrate
@@ -382,11 +383,16 @@ Config เรื่องเวลา (var ไม่ใช่ secret) `createAut
 - Direct link: `<APP>/join#code=XXXXXXXXXX`
 - Flow: เปิดลิงก์ -> ถ้ายังไม่ login เก็บ code ใน `sessionStorage` -> login/สมัคร (รวมรอบ redirect ของ Google) -> กดยืนยัน Join (`POST` ไม่ auto-join จาก `GET`)
 - Code ใช้ได้หลายคน ไม่หมดอายุ, rotate แล้วอันเก่าใช้ไม่ได้ สมาชิกเดิมยังอยู่, join ซ้ำได้ผลสำเร็จเฉย ๆ
-- Code ผิดตอบ error เดียวกันเสมอ, จำกัด 10 ครั้ง/นาที/user
+- Code ผิดตอบ error เดียวกันเสมอ: `400 {"error":"invalid_code"}` ทั้ง code ผิดรูปและ code ที่ไม่มีจริง ส่วน body ที่ไม่ผ่าน schema (ไม่มี field, ชนิดผิด, field ที่ไม่รู้จัก) ได้ `400 {"error":"invalid_request"}` และไม่นับเป็นครั้ง
+- จำกัด 10 ครั้ง/นาที/user นับทุกครั้งที่ user ที่ login แล้วส่ง body ถูกรูป รวม code ที่ถูก เกินแล้วได้ `429` + `Retry-After` เก็บในตาราง `join_attempt` (5)
+- ผู้สอนใช้ code ได้ `200` โดยไม่มีแถวใน `room_member` (ผู้สอนเห็นทุกห้องอยู่แล้ว 6.1)
+- ชื่อห้อง trim แล้วยาว 1 ถึง 100 ตัว สร้างสำเร็จตอบ `200` พร้อม `{ id, name, inviteCode, createdAt }` list ของผู้เรียนไม่มี `inviteCode` ส่วนของผู้สอนมี
+- ออกจากระบบ: client ล้าง code ที่ค้างใน `sessionStorage` ด้วย (6.2 "ล้าง state เมื่อ logout")
 
 ### 7.6 Session และการป้องกันทั่วไป
 - Session ใน D1 ไม่เปิด cookie cache เพื่อให้ revoke มีผลทันที, cookie `HttpOnly`, `SameSite=Lax`, `Secure` บน HTTPS
 - Origin middleware ของ app ครอบ `/api/auth/*`, ทุก write และ WS upgrade: `Origin` ต้องตรงกับ app (กัน CSRF และ cross-site WebSocket hijacking) ไม่พึ่ง check ของ library อย่างเดียว ส่วน `GET` snapshot ไม่บังคับ `Origin` (browser ไม่ส่งใน same-origin GET) อาศัยการไม่ส่ง CORS header และเป็น request ที่ไม่เปลี่ยนข้อมูล
+- **Write gate (M2):** middleware ตัวเดียวครอบทุก method ที่ไม่ใช่ `GET`/`HEAD`/`OPTIONS` ใต้ `/api/` ทั้ง route ของ app และของ Better Auth ต้องมี `Content-Type: application/json` ไม่เช่นนั้นได้ `415` (form ข้ามเว็บส่ง JSON ไม่ได้ถ้าไม่ผ่าน CORS preflight) Origin check ของ M4 (AC17) ใส่ใน middleware ตัวนี้ที่เดียว
 - Rate limit: `enabled: true` (7.0), `storage: "database"` (memory แยกกันต่อ isolate), `ipAddressHeaders: ["cf-connecting-ip"]`
 - **ต้องแก้ limit ของ sign-in/sign-up**: default คือ 3 ครั้ง/10 วินาที/IP ทั้งห้องเรียนที่ออก NAT เดียวกันจะติด ข้อเสนอ 60 ครั้ง/60 วินาที/IP
 - HTTP snapshot และ WS upgrade **ไม่จำกัดต่อ IP** (ทั้งห้องอาจใช้ IP เดียว) rate limit ของ Better Auth ทำงานใน router ของ `/api/auth/*` จึงไม่ครอบสอง path นี้ หน้าห้องใช้ `/api/me` ไม่เรียก `/get-session` ซ้ำ

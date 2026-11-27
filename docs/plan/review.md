@@ -328,3 +328,30 @@ Director re-ran M1 from a fresh local clone of `feat/v1` at `8fefb4a` (`pnpm ins
 | Move the instructor-API half of AC4 to M2 | Accept | No instructor API exists before `POST /api/rooms` |
 | `BETTER_AUTH_SECRETS` note | Accept, strengthened | Source: `options.secrets ?? parseSecretsEnv(env.BETTER_AUTH_SECRETS)` replaces our checked `secret`. A note is a promise; the app must refuse to start when the binding exists (M2) |
 | HEAD near-miss dropped | Accept for M1, add in M2 | Measured: HEAD on listed and unlisted paths both get 404, which fails closed; add a test so it stays that way |
+
+## Round 9: M2 verification (2026-11-27)
+
+Director re-ran M2 from a fresh local clone of `feat/v1` at `1c577ea` (`pnpm install --frozen-lockfile`, no `.dev.vars`, no Cloudflare login).
+
+### Verdict: M2 PASS on behaviour; two test fixes are required as the first M3 increment
+
+- `pnpm typecheck` exit 0; `pnpm test` **120 passed** in 16 files (default 100, short-ttl 2, production 9, node-env-test 9); `pnpm build && pnpm check:bundle` OK; spikes 3 passed; `pnpm test:e2e:app` 5 passed. COUNT AC12 room rows `{"actions":5,"allowed":7,"refused":12}`.
+- Breaks that went red (each reverted): create without the role check, rotate without the role check, learner list returning the real invite code, learner list showing every room, no `O→0`, no whitespace stripping, unknown code answered 404 instead of the uniform 400, limit disabled, limit shared across users, instructor join writing a member row, non-strict join schema, write gate disabled, `BETTER_AUTH_SECRETS` guard without the `process.env` check, and without the binding check, SPA joining automatically once signed in, SPA keeping the code in `sessionStorage` after joining, SPA leaving the hash in the address bar.
+- **Fix 1 (test):** moving the write gate off `/api/auth/*` leaves the gate test green, because Better Auth answers `415` itself for `text/plain` on `sign-out`. A probe shows the gate does cover auth routes (body `{"error":"unsupported_media_type"}`), and that without it Better Auth **accepts `application/x-www-form-urlencoded` on `sign-in/email`**. The test must assert our body and include that case.
+- **Fix 2 (config):** `HANDSUP_E2E_DIR=… pnpm build` exits 0 and writes the e2e `BETTER_AUTH_SECRET`, `GOOGLE_*` and `INSTRUCTOR_EMAILS` into `dist/handsup/wrangler.json` as plain vars; a normal build has `vars: {}`. `vite build` must refuse the variable.
+- SPA read: no HTML injection (`dangerouslySetInnerHTML` absent, error page shows fixed text only), no join without a click, code cleared after success and after `invalid_code`, Google `callbackURL` is a fixed relative path. Gap: sign-out does not clear a waiting code (moved to M3).
+
+### Rulings
+
+| Item | Ruling | Reason |
+| --- | --- | --- |
+| `POST /api/rooms` answers 200, not 201 | Accept | Consistent with the other writes; nothing depends on 201 |
+| Wrong code `400 invalid_code`, schema failure `400 invalid_request` | Accept | "Same error for every wrong code" holds between malformed and unknown codes (verified); a bad body is a client bug, not a guess |
+| Join limit counts every well-formed attempt, in table `join_attempt` | Accept | Simpler and stricter; one atomic upsert per attempt; spec 5 and 7.5 updated |
+| Instructor join → 200, no member row | Accept | Instructors already see every room |
+| Room names trimmed, 1 to 100 | Accept | Recorded in 7.5 |
+| Learner list hides the code, instructor list shows it | Accept | Matches the 6.1 row "see / rotate invite code"; verified red when leaked |
+| Write gate requires a JSON content type | Accept | It blocks form posts that Better Auth would otherwise accept; named in 7.6 as the site of M4's Origin check |
+| shadcn components hand-written, `lucide-react` dropped, exact pins | Accept | shadcn components are copied code anyway; fewer dependencies |
+| `HANDSUP_E2E_DIR` env hook in `vite.config.ts` | Accept only with a guard | Verified hazard above; dev-only, `vite build` must throw |
+| `Cache-Control: no-store` on `/api/*` (6.2) | M3, first increment | `/api/rooms` already returns invite codes to instructors |
