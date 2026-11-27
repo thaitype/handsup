@@ -69,7 +69,7 @@ export async function classroom(browser: Browser) {
 export const question = (page: Page, text: string) => page.getByTestId("question").filter({ hasText: text });
 
 /** Presses a delete button inside `within` and confirms in the dialog it opens. */
-export async function confirmDelete(page: Page, within: Locator, label: "Delete question" | "Delete answer") {
+export async function confirmDelete(page: Page, within: Locator, label: "Delete question" | "Delete answer" | "Delete message") {
   await within.getByRole("button", { name: label }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Delete", exact: true }).click();
 }

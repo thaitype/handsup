@@ -93,8 +93,9 @@ questions.post("/api/rooms/:id/questions", async (c) => {
   return respond(c, await entry.stub.ask(entry.identity, body));
 });
 
+// Who may write in a thread depends on who asked, so the room object decides (spec 6.1).
 questions.post("/api/rooms/:id/questions/:qid/answers", async (c) => {
-  const entry = await enter(c, "instructor");
+  const entry = await enter(c);
   if (entry.refused) return entry.refused;
   const body = await readBody(c, answerBody);
   if (!body) return errorResponse(c, 400, "invalid_request");
@@ -118,7 +119,7 @@ questions.delete("/api/rooms/:id/questions/:qid", async (c) => {
 });
 
 questions.delete("/api/rooms/:id/questions/:qid/answers/:aid", async (c) => {
-  const entry = await enter(c, "instructor");
+  const entry = await enter(c);
   if (entry.refused) return entry.refused;
   return respond(c, await entry.stub.deleteAnswer(entry.identity, c.req.param("qid"), c.req.param("aid")));
 });

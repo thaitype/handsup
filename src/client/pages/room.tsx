@@ -176,11 +176,20 @@ function Question({
           {question.answers.map((answer) => (
             <li key={answer.id} data-testid="answer" className="grid gap-1">
               <div className="flex items-center justify-between gap-2 text-sm">
-                <span className="font-medium">{answer.authorName}</span>
-                {isInstructor && (
+                <span className="flex items-center gap-2">
+                  <span className="font-medium" data-testid="message-author">
+                    {answer.authorName ?? "คุณ"}
+                  </span>
+                  {answer.fromInstructor && (
+                    <span className="rounded-full border px-2 text-xs" data-testid="instructor-mark">
+                      ผู้สอน
+                    </span>
+                  )}
+                </span>
+                {(isInstructor || answer.isMine) && (
                   <ConfirmDelete
-                    label="Delete answer"
-                    title="Delete this answer?"
+                    label={answer.fromInstructor ? "Delete answer" : "Delete message"}
+                    title={answer.fromInstructor ? "Delete this answer?" : "Delete this message?"}
                     description="This cannot be undone."
                     variant="ghost"
                     disabled={busy}
@@ -193,10 +202,10 @@ function Question({
           ))}
         </ul>
       )}
-      {isInstructor && (
+      {(isInstructor || question.isMine) && (
         <Composer
-          label="Your answer"
-          submitLabel="Answer"
+          label={isInstructor ? "Your answer" : "Add a message"}
+          submitLabel={isInstructor ? "Answer" : "Send"}
           applyWrite={applyWrite}
           post={(body, id) => api.answer(roomId, question.id, body, id)}
         />

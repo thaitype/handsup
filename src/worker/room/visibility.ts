@@ -21,6 +21,7 @@ export type QuestionRow = {
 export type AnswerRow = {
   id: string;
   question_id: string;
+  author_id: string;
   author_name: string;
   body: string;
   created_at: number;
@@ -43,11 +44,18 @@ export function project(viewer: Viewer, question: QuestionRow, answers: readonly
     isMine: question.author_id === viewer.id,
     createdAt: question.created_at,
     resolvedAt: question.resolved_at,
-    answers: answers.map((answer) => ({
-      id: answer.id,
-      authorName: answer.author_name,
-      body: answer.body,
-      createdAt: answer.created_at,
-    })),
+    answers: answers.map((answer) => {
+      // The thread holds the asker's messages and instructors' (spec 6.1), so a message that
+      // is not the asker's is an instructor's. No role is stored.
+      const fromAsker = answer.author_id === question.author_id;
+      return {
+        id: answer.id,
+        authorName: fromAsker && !showName ? null : answer.author_name,
+        fromInstructor: !fromAsker,
+        isMine: answer.author_id === viewer.id,
+        body: answer.body,
+        createdAt: answer.created_at,
+      };
+    }),
   };
 }

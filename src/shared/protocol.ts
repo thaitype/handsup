@@ -7,7 +7,19 @@ export const PROTOCOL_VERSION = 1;
 
 export type Visibility = "public" | "private";
 
-export type AnswerView = { id: string; authorName: string; body: string; createdAt: number };
+/**
+ * One message in the thread under a question: an instructor's answer or the asker's own
+ * follow-up. Only those two may write there.
+ */
+export type AnswerView = {
+  id: string;
+  /** Null when it is the asker's message and this viewer may not see the asker's name. */
+  authorName: string | null;
+  fromInstructor: boolean;
+  isMine: boolean;
+  body: string;
+  createdAt: number;
+};
 
 export type QuestionView = {
   id: string;

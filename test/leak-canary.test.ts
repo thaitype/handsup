@@ -9,6 +9,7 @@ import {
   classroom,
   everything,
   questionFrom,
+  resetPostLimit,
   roomApi,
   snapshotFrom,
 } from "./support/classroom.ts";
@@ -33,7 +34,7 @@ describe("AC9 leak canary over the socket and HTTP", () => {
     /** Where this phase's frames start on each socket. */
     let from = { b: socketB.frames.length, a: socketA.frames.length, i: socketInstructor.frames.length };
 
-    const secret = { a: marker("PRIVATE-A"), ghost: marker("PRIVATE-GHOST"), answerA: marker("ANSWER-A"), answerGhost: marker("ANSWER-GHOST") };
+    const secret = { a: marker("PRIVATE-A"), ghost: marker("PRIVATE-GHOST"), answerA: marker("ANSWER-A"), answerGhost: marker("ANSWER-GHOST"), followUp: "" };
     const askedA = await questionFrom(await api.ask(a.browser, secret.a, "private"));
     const askedGhost = await questionFrom(await api.ask(ghost.browser, secret.ghost, "private"));
     const secrets = [secret.a, secret.ghost, ghost.name, askedA.id, askedGhost.id];
@@ -49,6 +50,8 @@ describe("AC9 leak canary over the socket and HTTP", () => {
       /** What the private activity of this phase must have sent to A and the instructor. */
       heard: { a: string[]; instructor: string[] } = { a: [], instructor: [] },
     ) => {
+      // This test is about visibility; the posting rate has its own.
+      await resetPostLimit();
       const control = marker(`PUBLIC-${phase}`);
       await questionFrom(await api.ask(a.browser, control, "public"));
 
@@ -57,6 +60,7 @@ describe("AC9 leak canary over the socket and HTTP", () => {
         "B snapshot": await everything(await api.snapshot(b.browser)),
         "B write response": await everything(await api.ask(b.browser, own, "public")),
         "B refused write": await everything(await api.removeQuestion(b.browser, askedGhost.id)),
+        "B writing in a private thread": await everything(await api.answer(b.browser, askedGhost.id, "let me in")),
       };
       // The socket: B must have heard this phase's public events on the very socket checked.
       await socketB.received(control);
@@ -82,6 +86,7 @@ describe("AC9 leak canary over the socket and HTTP", () => {
       expect(channels["B snapshot"].body, `${phase}: control`).toContain(control);
       expect(channels["B write response"].body, `${phase}: control`).toContain(own);
       expect(channels["B refused write"].status, phase).toBe(404);
+      expect(channels["B writing in a private thread"].status, phase).toBe(404);
       for (const [channel, seen] of Object.entries(channels)) {
         for (const item of secrets) expect(seen.all, `${phase}: ${channel} leaks ${item}`).not.toContain(item);
       }
@@ -105,6 +110,16 @@ describe("AC9 leak canary over the socket and HTTP", () => {
     const answerA = answeredA.answers[0]!.id;
     secrets.push(secret.answerA, secret.answerGhost, answerA, answeredGhost.answers[0]!.id);
     await check("answer", { forA: secret.answerA, forInstructor: secret.answerGhost }, { a: [secret.answerA], instructor: [secret.answerA, secret.answerGhost] });
+
+    // The asker follows up in their own private thread.
+    secret.followUp = marker("FOLLOWUP-A");
+    await resetPostLimit();
+    const followed = await questionFrom(await api.answer(a.browser, askedA.id, secret.followUp));
+    const followUpId = followed.answers.at(-1)!.id;
+    secrets.push(secret.followUp, followUpId);
+    await check("follow-up", { forA: secret.followUp, forInstructor: secret.followUp }, { a: [secret.followUp], instructor: [secret.followUp] });
+    await questionFrom(await api.removeAnswer(a.browser, askedA.id, followUpId));
+    await check("delete follow-up", { forA: secret.answerA, forInstructor: secret.answerA }, { a: [askedA.id], instructor: [askedA.id] });
 
     await questionFrom(await api.resolve(instructor, askedA.id));
     await questionFrom(await api.resolve(instructor, askedGhost.id));
@@ -146,7 +161,7 @@ describe("AC9 leak canary over the socket and HTTP", () => {
     secrets.push(late.body, late.id);
     await check("after eviction", { forA: null, forInstructor: late.body }, { a: [], instructor: [late.body, ghost.name] });
 
-    expect(phases).toBe(8);
+    expect(phases).toBe(10);
     for (const s of [socketA, socketB, socketInstructor]) s.socket.close(1000);
     expect((await snapshotFrom(await api.snapshot(b.browser))).questions.every((q) => q.visibility === "public")).toBe(true);
   });

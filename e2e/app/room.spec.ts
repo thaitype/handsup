@@ -48,6 +48,8 @@ test("AC8: questions, answers, resolved and deletes reach every screen that may 
   // A learner has no instructor controls, and only the owner may delete.
   await expect(other.getByRole("button", { name: "Mark resolved" })).toHaveCount(0);
   await expect(other.getByLabel("Your answer")).toHaveCount(0);
+  // Only the asker may write under their question.
+  await expect(other.getByLabel("Add a message")).toHaveCount(0);
   await expect(other.getByRole("button", { name: "Presenter mode" })).toHaveCount(0);
   await confirmDelete(asker, question(asker, hidden), "Delete question");
   await expect(question(teacher, hidden)).toHaveCount(0, SOON);

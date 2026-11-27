@@ -70,9 +70,14 @@ describe("AC12: question actions by role (spec 6.1)", () => {
         run: async (b) => (await api.ask(b, "new")).status,
       },
       {
-        name: "answer",
-        expected: { guest: 401, "learner, not a member": 403, "other member": 403, asker: 403, instructor: 200 },
+        name: "write in a public thread",
+        expected: { guest: 401, "learner, not a member": 404, "other member": 403, asker: 200, instructor: 200 },
         run: async (b) => (await api.answer(b, open, "a")).status,
+      },
+      {
+        name: "write in a private thread",
+        expected: { guest: 401, "learner, not a member": 404, "other member": 404, asker: 200, instructor: 200 },
+        run: async (b) => (await api.answer(b, hidden, "a")).status,
       },
       {
         name: "mark resolved",
@@ -80,11 +85,27 @@ describe("AC12: question actions by role (spec 6.1)", () => {
         run: async (b) => (await api.resolve(b, open)).status,
       },
       {
-        name: "delete an answer",
-        expected: { guest: 401, "learner, not a member": 403, "other member": 403, asker: 403, instructor: 200 },
+        name: "delete an instructor's answer",
+        expected: { guest: 401, "learner, not a member": 404, "other member": 403, asker: 403, instructor: 200 },
         run: async (b) => {
           const answered = await questionFrom(await api.answer(instructor, open, "to delete"));
           return (await api.removeAnswer(b, open, answered.answers.at(-1)!.id)).status;
+        },
+      },
+      {
+        name: "delete the asker's message in a public thread",
+        expected: { guest: 401, "learner, not a member": 404, "other member": 403, asker: 200, instructor: 200 },
+        run: async (b) => {
+          const sent = await questionFrom(await api.answer(asker.browser, open, "follow-up"));
+          return (await api.removeAnswer(b, open, sent.answers.at(-1)!.id)).status;
+        },
+      },
+      {
+        name: "delete the asker's message in a private thread",
+        expected: { guest: 401, "learner, not a member": 404, "other member": 404, asker: 200, instructor: 200 },
+        run: async (b) => {
+          const sent = await questionFrom(await api.answer(asker.browser, hidden, "follow-up"));
+          return (await api.removeAnswer(b, hidden, sent.answers.at(-1)!.id)).status;
         },
       },
       {
@@ -111,6 +132,6 @@ describe("AC12: question actions by role (spec 6.1)", () => {
       }
     }
     console.log("COUNT AC12 question rows", JSON.stringify({ actions: rows.length, ...counts }));
-    expect(counts).toEqual({ allowed: 20, refused: 30 });
+    expect(counts).toEqual({ allowed: 27, refused: 38 });
   });
 });
