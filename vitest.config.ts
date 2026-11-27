@@ -1,8 +1,10 @@
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 import { experimental_readRawConfig } from "wrangler";
+import { buildInfo } from "./scripts/build-info.mjs";
 
 /** Test values only. Every app variable is set here so a developer's .dev.vars cannot leak in. */
 const baseVars = {
@@ -30,6 +32,9 @@ function isolatedWranglerConfig(): string {
   return target;
 }
 
+/** Read here with git directly, so the version test does not trust build-info.mjs. */
+const gitHead = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+
 export default defineConfig(async () => {
   const migrations = await readD1Migrations(path("./migrations"));
   const testConfigPath = isolatedWranglerConfig();
@@ -37,10 +42,13 @@ export default defineConfig(async () => {
     plugins: [
       cloudflareTest({
         wrangler: { configPath: testConfigPath },
-        miniflare: { bindings: { ...baseVars, ...extraVars, TEST_MIGRATIONS: migrations } },
+        miniflare: {
+          bindings: { ...baseVars, ...extraVars, TEST_MIGRATIONS: migrations, TEST_GIT_HEAD: gitHead },
+        },
       }),
     ],
     test: { name, include, setupFiles: ["./test/support/apply-migrations.ts"] },
+    define: { __HANDSUP_BUILD__: JSON.stringify(buildInfo({ requireGit: true })) },
   });
 
   return {

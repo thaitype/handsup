@@ -380,3 +380,29 @@ No stray processes: none running from any `handsup` directory before or after th
 ### M3 brief
 
 Confirmed with amendments, now at `docs/plan/m3-brief.md`: increments ordered so the leak canary runs on the two HTTP channels before any WS or UI code; N5 write rules (length, post rate, room cap with a count-free error) assigned to M3, since no milestone owned them; the M3 parts of AC16 and AC17 spelled out; the gate script must exit non-zero on any failure.
+
+## Round 11: M3 verification (2026-11-27)
+
+Director (Freya's session) verified `feat/v1` at `6b41675` from a cold clone (`pnpm install --frozen-lockfile`, no `.dev.vars`, no Cloudflare login; e2e moved to port 5399 in the clone only). Increment 0 (`0ff4a4a..5113e4f`) is included.
+
+### Verdict: M3 PASS
+
+- `pnpm gate` exit 0: typecheck, **191 tests** in 25 files, build, check:bundle, spikes 3, app e2e 10, slow e2e 6 (AC27: 2 snapshot requests in 90 s, both blocked shapes).
+- Time-boxed per Clara: break-to-red only for the leak, instructor role, membership and Origin. 13 of 14 breaks went red, each reverted:
+  - Leak, every channel: `canSee` always true; private asker name shown to all; `authorId` added to the view; HTTP snapshot unfiltered; WS snapshot unfiltered; WS events unfiltered; `question.remove` sent to everyone; delete of an invisible question answering 403 instead of 404.
+  - Role: room object treating everyone as instructor; Worker answer route without its instructor check; demoted instructor's socket left open.
+  - Membership: learners entering any room (HTTP snapshot 200 and WS 101 for non-members).
+  - Origin: WS upgrade from any origin (`https://evil.example` got 101).
+  - **Stayed green:** removing the room object's own instructor check in `answer`. The Worker refuses first and the object is reachable only from the Worker, so this is an untested second layer, not a hole. Deferred.
+- Increment 0: write gate test now asserts our body and covers the form-encoded sign-in; `HANDSUP_E2E_DIR=… pnpm build` now fails ("refusing to build with the e2e config"), and check:bundle rejects baked vars; `no-store` on every `/api/*` response with a control outside `/api/`; sign-out clears the waiting join code (browser test).
+
+### Rulings
+
+| Item | Ruling | Reason |
+| --- | --- | --- |
+| AC30 has no test, moved to M4 | Accept, with a before-deploy deferral | It is a NAT capacity check; the cap it once paired with is gone (R24) |
+| Post limit 10/min also counts instructor answers | Accept for the local test, change before deploy | An instructor answering a busy class can pass 10 answers a minute and get 429. Flood risk comes from learners; instructors are chosen by env. Recommend exempting instructors; if Mild wants them limited, a higher instructor limit |
+
+### Deferrals (trigger: before any deploy)
+
+Recorded in plan §5: server-side socket kill on password reset; AC18; AC26; Cloudflare e2e suite, AC24 and the R22 dry-run; full runbook; AC30 test; instructor post-limit; RoomDO second-layer role test.
