@@ -406,3 +406,28 @@ Director (Freya's session) verified `feat/v1` at `6b41675` from a cold clone (`p
 ### Deferrals (trigger: before any deploy)
 
 Recorded in plan §5: server-side socket kill on password reset; AC18; AC26; Cloudflare e2e suite, AC24 and the R22 dry-run; full runbook; AC30 test; instructor post-limit; RoomDO second-layer role test.
+
+## Round 12: final local verification after the merge (2026-11-27)
+
+Director (Freya's session) verified `feat/v1` at `127c74d` (merge of `feat/v1-m5`, on top of M4 `fbce067`) from a cold clone: `pnpm install --frozen-lockfile`, no `.dev.vars`, no Cloudflare login, e2e moved to port 5399 in the clone only.
+
+### Verdict: PASS for Mild's local test (G1). Not deploy-ready until the reset-link item below is fixed.
+
+- `pnpm gate` exit 0: typecheck, **204 tests** in 30 files, build, check:bundle, spikes 3, app e2e 14, slow e2e 6 (AC27: 2 snapshot requests in 90 s for both blocked shapes).
+- Break-to-red (scope set by Clara), 21 of 22 red, each reverted:
+  - Leak, every channel (8/8): `canSee` always true; private asker name to all; `authorId` in the view; HTTP snapshot unfiltered; WS snapshot unfiltered; WS events unfiltered; `question.remove` to all; delete of an invisible question answering 403.
+  - Instructor role (4/5): room object treats everyone as instructor; Worker answer route without its check; demoted instructor socket kept; admin API open to learners. Green: the room object's own check in `answer` (Worker check in front; deferred in round 11).
+  - Membership (1/1): learners entering any room.
+  - Origin (3/3): WS from any origin; Origin removed from the write gate (Better Auth's own check still answers 403, the test tells the bodies apart); prefix match letting `http://localhost:5174` through.
+  - Reset (5/5): instructor accounts allowed a link; older links kept; sessions not revoked; expiry ignored (short-ttl project); library reset route opened.
+  - Single-use is the library's behaviour; its test ran and passed, not broken (breaking it means editing the shared package store).
+- Part A after the merge: `/api/version` is in the bundle with commit `127c74d5…` and has `test/version.test.ts`; README and the headed WS-block script (`playwright.headed.config.ts`, `e2e/headed/ws-blocked.spec.ts`) are present.
+- AC30 now has a test (`test/shared-address.test.ts`); deferral closed.
+
+### Ruling: reset link made before promotion (asked by Clara)
+
+Confirmed with a probe test (not committed): a link made while the target was a learner, used after the target's email joined `INSTRUCTOR_EMAILS`, set the password (200) and the new password signed in with role `instructor`. The instructor refusal is checked only when a link is made. Under N7 (sign up first, then add the email by deploy) the instructor who made the link, or whoever took over that instructor, can take over the new instructor's account within the 24 h lifetime: the instructor-on-instructor takeover the refusal exists to prevent (N2 accepts impersonating learners only). **Acceptable for the local test; must be fixed before any deploy**: check the role again when the link is used, delete the token and refuse. A runbook step alone is not enough. Recorded in plan §5.
+
+### Plan §3 checked against the app
+
+Edited in plan §3 to match the code at `127c74d`: open `http://localhost:5173` only (Origin check); README steps and `/api/version` in step 0; AC24 removed from steps 1 and 9 (cut); step 8 says an open room page keeps updates for up to 15 minutes after a reset (socket kill deferred) and adds the instructor refusal; step 11 names the "New code" button; step 12 gives the headed-script command and the one-time `playwright install chromium`.

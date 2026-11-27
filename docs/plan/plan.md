@@ -91,23 +91,26 @@ Decision ใหม่ที่เกิดระหว่าง build ต้อ�
 3. ใส่ `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` ใน `.dev.vars` บนเครื่องเอง (ไม่ส่งในแชต ไม่ commit)
 4. Browser 3 profile: I (ผู้สอน), A และ B (ผู้เรียน สมัครด้วย password)
 5. (ถ้ามี) Google account อีกอัน สำหรับข้อ 10
+6. สำหรับข้อ 12: รัน `pnpm exec playwright install chromium` หนึ่งครั้งบนเครื่อง
+
+ทุก profile ต้องเปิด **`http://localhost:5173` เท่านั้น** (ไม่ใช่ `127.0.0.1`) เพราะ write ทุกอย่างต้องมาจาก origin นั้น ไม่เช่นนั้นสมัคร/login ไม่ได้ (`403 forbidden_origin`)
 
 ### ขั้นตอน (ประมาณ 25 นาที)
 | # | ทำ | ต้องเห็น |
 | --- | --- | --- |
-| 0 | ทำตาม README: install, migrate local, `pnpm test`, `pnpm dev` | test ผ่านทั้งหมด พร้อมจำนวน test |
-| 1 | I: สมัครด้วย email ผู้สอน (password หรือ Google) แล้วรัน check AC24 ตาม runbook | เข้าหน้า instructor ได้ และ AC24 ผ่าน |
-| 2 | I สร้างห้อง แล้ว A และ B เปิด invite link, สมัคร, กด Join | ได้ code 10 ตัว และ A, B เข้าห้องได้ |
+| 0 | ทำตาม README ข้อ 1 ถึง 3: `pnpm install`, `pnpm test`, `cp .dev.vars.example .dev.vars` แล้วกรอก, `pnpm db:migrate:local`, `pnpm dev` | `pnpm test` ผ่านทั้งหมด พร้อมจำนวน test และ `http://localhost:5173/api/version` แสดง commit ที่ sign off |
+| 1 | I: สมัครด้วย email ผู้สอน (password หรือ Google) | header แสดงชื่อพร้อม `(instructor)` และมีเมนู Reset passwords (check AC24 ตาม runbook **ตัดออกจากรอบนี้** เลื่อนไปก่อน deploy) |
+| 2 | I สร้างห้อง แล้ว A และ B เปิด direct link (ปุ่ม Copy link), สมัคร, กด Join room | ได้ code 10 ตัว และ A, B เข้าห้องได้ |
 | 3 | A ถาม public "P1" และคำถามส่วนตัว "PRIV1" | (โหมด WS ปกติ) B เห็น P1 พร้อมชื่อ A ทันทีแต่**ไม่เห็น PRIV1**, I เห็นทั้งสองข้อพร้อมชื่อ A |
 | 4 | I ตอบทั้งสองข้อแล้ว mark resolved | A เห็นทั้งสองคำตอบ, B เห็นเฉพาะของ P1 โดยไม่ต้อง refresh |
 | 5 | I เปิด presenter mode แล้ว reload | PRIV1 และชื่อ A ที่ผูกกับคำถามนั้นไม่อยู่บนจอ I ทั้งก่อนและหลัง reload, ปิดแล้วกลับมาพร้อมรูปแบบที่ต่างจาก public |
 | 6 | A ตั้ง DevTools เป็น offline, I ตอบ P1 เพิ่ม แล้ว A กลับ online | A ได้คำตอบใหม่เอง |
 | 7 | A ลบ PRIV1 จากนั้น restart dev server | PRIV1 หายจาก I, หลัง restart ข้อมูลอื่นยังอยู่และทุกจอต่อกลับเอง |
-| 8 | I สร้าง reset link ให้ B แล้วเปิดใน profile B | B ถูก logout, ตั้งรหัสใหม่ได้, ใช้ลิงก์ซ้ำไม่ได้ |
-| 9 | เพิ่ม email ใหม่ที่ยังไม่มีบัญชีลงใน `INSTRUCTOR_EMAILS` แล้วรัน check AC24 จากนั้นสมัครด้วย email นั้นแล้วรันอีกครั้ง | ครั้งแรก**แดง** ครั้งที่สองผ่าน (เห็นว่า check จับกรณีลืมสมัครก่อนได้) |
+| 8 | I เปิด Reset passwords ค้น B กด Create reset link แล้วเปิดลิงก์ใน profile B ตั้งรหัสใหม่ จากนั้นลองเปิดลิงก์เดิมอีกครั้ง | ตั้งรหัสใหม่ได้, ลิงก์เดิมได้ "This link does not work any more", session เดิมของ B ใช้ไม่ได้ (request ถัดไปหรือ reload ต้อง login ใหม่) **แต่หน้าห้องที่เปิดค้างไว้ยังรับ update ได้ถึง 15 นาที** (การตัด socket ทันทีเลื่อนไปก่อน deploy) ลองสร้างลิงก์ให้ I เองต้องได้ "Instructor account: no reset link." |
+| 9 | ~~AC24 check~~ **ตัดออกจากรอบนี้** (เลื่อนไปก่อน deploy ตามแผนย่อ) | - |
 | 10 | (ถ้ามี) สมัคร password ด้วย Google email อีกอัน แล้วกด Login with Google ด้วย account นั้น | ไม่ถูก link พร้อมข้อความอธิบาย |
-| 11 | I rotate code แล้วผู้ใช้ใหม่ใช้ link เดิม | Join ไม่ได้ |
-| 12 | เปิดห้องเป็น B ด้วย script บล็อก WS ตาม README แล้วให้ A ถาม public "P2" และคำถามส่วนตัว "PRIV2" จากนั้น B กด refresh | B เห็นตัวบอก "โหมดสำรอง" และข้อมูลเดิมภายในไม่กี่วินาที, P2 ขึ้นเองภายในราว 40 วินาที หรือทันทีเมื่อ refresh, **ไม่เห็น PRIV2**, B โพสต์และเห็นของตัวเองทันที |
+| 11 | I กด New code แล้วผู้ใช้ใหม่ใช้ link เดิม | Join ไม่ได้ ("This invite code does not work") ส่วนลิงก์ใหม่ใช้ได้ |
+| 12 | ขณะ `pnpm dev` รันอยู่ อีก terminal รัน `pnpm exec playwright test -c playwright.headed.config.ts` (README หัวข้อ "Watching the polling fallback") หน้าต่าง Chromium ที่เปิดเป็น browser ใหม่ ให้ login เป็น B ในหน้าต่างนั้นแล้วเปิดห้อง จากนั้นให้ A ถาม public "P2" และคำถามส่วนตัว "PRIV2" แล้ว B กด refresh ปิดหน้าต่างเมื่อจบ | B เห็นตัวบอก "โหมดสำรอง" และข้อมูลเดิมภายในไม่กี่วินาที, P2 ขึ้นเองภายในราว 40 วินาที หรือทันทีเมื่อ refresh, **ไม่เห็น PRIV2**, B โพสต์และเห็นของตัวเองทันที |
 
 Sign off: Mild พิมพ์ข้อความ เช่น "sign off local handsup" ถ้ามีข้อไหนไม่ผ่าน ให้แจ้งเลขข้อ แล้วงานจะกลับไปที่ builder
 
@@ -173,7 +176,8 @@ Mild ต้องทำเอง: เพิ่ม redirect URI `https://handsup-
 | AC26 พิสูจน์การกู้รหัสผู้สอนตาม runbook | builder | ก่อน deploy ใดๆ (แผนย่อ) |
 | Playwright e2e suite บน Cloudflare, AC24, `wrangler deploy --dry-run --var` (R22) | builder, platform-operator | ก่อน deploy ใดๆ (แผนย่อ) |
 | Runbook ฉบับเต็ม (ตอนนี้มีแค่ README สำหรับ local) | builder | ก่อน deploy ใดๆ (แผนย่อ) |
-| AC30 (50 user จาก IP เดียว poll ได้ 200) ยังไม่มี test | builder | M4 หรือก่อน deploy ใดๆ |
+| ~~AC30 ยังไม่มี test~~ ปิดแล้วใน M4 (`test/shared-address.test.ts`, review รอบ 12) | - | - |
 | เพดานโพสต์ 10/นาที/user นับคำตอบของผู้สอนด้วย ผู้สอนที่ตอบเร็วในห้องจริงจะติด 429 (review รอบ 11 แนะนำยกเว้นผู้สอน) | builder, Mild ถ้าจะคงไว้ | ก่อน deploy ใดๆ |
+| Reset link ที่สร้างตอนเป้าหมายยังเป็นผู้เรียน ยังใช้ได้หลังเพิ่ม email นั้นลง `INSTRUCTOR_EMAILS` (ตรวจแล้วรอบ 12: ตั้งรหัสได้ 200 แล้ว login ได้ role instructor) ผู้ที่ถือลิงก์จึงยึดบัญชีผู้สอนใหม่ได้ภายใน 24 ชม. ต้องตรวจ role อีกครั้งตอนใช้ลิงก์ (`POST /api/auth/reset-password`: หา user จาก token ใน `verification` ถ้าเป็นผู้สอนแล้วให้ลบ token และปฏิเสธ) พร้อม test ที่แดงเมื่อเอาออก | builder | ก่อน deploy ใดๆ |
 | การตรวจ role ชั้นที่สองใน RoomDO (`answer`) ไม่มี test ที่แดงเมื่อเอาออก (ชั้น Worker มี) | builder | ก่อน deploy ใดๆ |
 | AC5 (ไม่ link) พึ่ง `requireLocalEmailVerified` default กับ `emailVerified=false` ของบัญชี password (ตรวจ M0: เปิด `trustedProviders` อย่างเดียว test ยังเขียว ต้องปิด `requireLocalEmailVerified` ด้วยจึงแดง) ถ้ามีทางใดตั้ง `emailVerified=true` ให้บัญชี password การ link จะเปิดเอง | builder (M4), director ตรวจ | M4 reset password และทุกครั้งที่ bump `better-auth`: รัน AC5 ซ้ำหลัง reset และ assert ว่า `emailVerified` ยัง `false` |
