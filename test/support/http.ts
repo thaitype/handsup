@@ -52,6 +52,11 @@ export class Browser {
     return copy;
   }
 
+  /** The `cookie` header this browser would send. */
+  cookieHeader() {
+    return [...this.#cookies].map(([k, v]) => `${k}=${v}`).join("; ");
+  }
+
   signUp(email: string, name = "Test User", password = PASSWORD) {
     return this.fetch("/api/auth/sign-up/email", { name, email, password });
   }
