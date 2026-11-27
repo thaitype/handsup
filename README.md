@@ -145,6 +145,18 @@ Instructors register on the deployed site first. Then deploy again with
 script refuses a dirty tree, and refuses a domain that already has a DNS record but does not
 answer as handsup (`--replace-existing-dns` overrides that and overwrites the record).
 
+Check the running site with an invite code from a room made for testing, then remove the test
+accounts and their questions:
+
+```sh
+BASE_URL=https://<your domain> INVITE_CODE=<code> node scripts/prod-check.mjs   # about 90 s
+node scripts/prod-cleanup.mjs --remote          # prints what it would delete
+node scripts/prod-cleanup.mjs --remote --yes    # deletes it
+```
+
+The check writes the test accounts to `~/handsup-prodcheck.json`, which the cleanup reads and then
+removes. Keep that file until the cleanup has succeeded.
+
 ## Known issues
 
 ### A reset link made before an email joins `INSTRUCTOR_EMAILS` still works afterwards
