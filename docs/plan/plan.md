@@ -168,4 +168,12 @@ Mild ต้องทำเอง: เพิ่ม redirect URI `https://handsup-
 | CI | builder | ก่อนมีคนที่สองเขียนโค้ด หรือก่อน production |
 | PBKDF2 limit ของ production Workers (issue workerd #1346) | director | ถ้าต้องกลับมาพิจารณาทางเลือกของ hash |
 | Zod ที่ pin ตรง (`4.6.7`) ต้องตรงกับ copy ที่ `better-auth` ใช้ เพื่อให้ `z.email()` ของเราเป็นกฎเดียวกับตอนสมัคร | builder | ทุกครั้งที่ bump `better-auth`: ตรวจ `pnpm-lock.yaml` ว่า `better-auth` resolve zod version เดียวกับของเรา |
+| Server ตัด socket ทันทีเมื่อ reset password (8.4) ตอนนี้ socket ค้างได้ไม่เกิน 15 นาที | builder | ก่อน deploy ใดๆ (ตัดออกตามแผนย่อที่ Mild รับ 2026-11-27 ~11:17Z "เอาตามนี้") |
+| AC18 test rate limit แยกตาม IP | builder | ก่อน deploy ใดๆ (แผนย่อ) |
+| AC26 พิสูจน์การกู้รหัสผู้สอนตาม runbook | builder | ก่อน deploy ใดๆ (แผนย่อ) |
+| Playwright e2e suite บน Cloudflare, AC24, `wrangler deploy --dry-run --var` (R22) | builder, platform-operator | ก่อน deploy ใดๆ (แผนย่อ) |
+| Runbook ฉบับเต็ม (ตอนนี้มีแค่ README สำหรับ local) | builder | ก่อน deploy ใดๆ (แผนย่อ) |
+| AC30 (50 user จาก IP เดียว poll ได้ 200) ยังไม่มี test | builder | M4 หรือก่อน deploy ใดๆ |
+| เพดานโพสต์ 10/นาที/user นับคำตอบของผู้สอนด้วย ผู้สอนที่ตอบเร็วในห้องจริงจะติด 429 (review รอบ 11 แนะนำยกเว้นผู้สอน) | builder, Mild ถ้าจะคงไว้ | ก่อน deploy ใดๆ |
+| การตรวจ role ชั้นที่สองใน RoomDO (`answer`) ไม่มี test ที่แดงเมื่อเอาออก (ชั้น Worker มี) | builder | ก่อน deploy ใดๆ |
 | AC5 (ไม่ link) พึ่ง `requireLocalEmailVerified` default กับ `emailVerified=false` ของบัญชี password (ตรวจ M0: เปิด `trustedProviders` อย่างเดียว test ยังเขียว ต้องปิด `requireLocalEmailVerified` ด้วยจึงแดง) ถ้ามีทางใดตั้ง `emailVerified=true` ให้บัญชี password การ link จะเปิดเอง | builder (M4), director ตรวจ | M4 reset password และทุกครั้งที่ bump `better-auth`: รัน AC5 ซ้ำหลัง reset และ assert ว่า `emailVerified` ยัง `false` |
