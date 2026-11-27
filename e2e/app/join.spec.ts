@@ -139,3 +139,31 @@ test("the auth error page explains account_not_linked and stays generic otherwis
   await expect(page.getByTestId("generic-error")).toBeVisible();
   await expect(page.getByTestId("account-not-linked")).toHaveCount(0);
 });
+
+test("signing out drops a join code that was never confirmed", async ({ page, playwright }) => {
+  const instructor = await playwright.request.newContext({ baseURL: "http://localhost:5199" });
+  const room = await createRoom(instructor, `SignOut ${crypto.randomUUID().slice(0, 8)}`);
+  await signedIn(page.request, uniqueEmail("leaves"));
+  const stored = () => page.evaluate((key) => sessionStorage.getItem(key), STORAGE_KEY);
+
+  await page.goto(`/join#code=${room.inviteCode}`);
+  await expect(page.getByRole("button", { name: "Join room" })).toBeVisible();
+  // Control: the code is waiting before sign-out.
+  expect(await stored()).toBe(room.inviteCode);
+
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL(/\/sign-in$/);
+  expect(await stored()).toBeNull();
+
+  // The next person to sign in in this tab lands on their rooms, not on the old confirmation.
+  const next = uniqueEmail("next");
+  const nextContext = await playwright.request.newContext({ baseURL: "http://localhost:5199" });
+  await signedIn(nextContext, next);
+  await nextContext.dispose();
+  await page.getByLabel("Email").fill(next);
+  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  expect(await roomNames(page)).toEqual([]);
+  await instructor.dispose();
+});

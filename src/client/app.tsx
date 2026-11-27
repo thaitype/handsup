@@ -1,6 +1,7 @@
 import { Link, Navigate, Route, Routes, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { api } from "./api.ts";
+import { pendingJoin } from "./pending-join.ts";
 import { AuthErrorPage } from "./pages/auth-error.tsx";
 import { JoinPage } from "./pages/join.tsx";
 import { RoomsPage } from "./pages/rooms.tsx";
@@ -12,6 +13,8 @@ export function App() {
   const navigate = useNavigate();
   const signOut = async () => {
     await api.signOut();
+    // A code waiting for this person must not carry over to whoever signs in next.
+    pendingJoin.clear();
     await refresh();
     navigate("/sign-in");
   };
