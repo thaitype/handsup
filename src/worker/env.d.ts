@@ -8,6 +8,8 @@ interface AppVars {
   INSTRUCTOR_EMAILS: string;
   RESET_LINK_TTL_SECONDS?: string;
   SOCKET_MAX_LIFETIME_SECONDS?: string;
+  /** Must never be set: Better Auth would use it instead of BETTER_AUTH_SECRET. */
+  BETTER_AUTH_SECRETS?: string;
 }
 interface Env extends AppVars {}
 declare namespace Cloudflare {

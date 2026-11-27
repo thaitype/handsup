@@ -114,3 +114,27 @@ describe("auth path allowlist (spec 7.1)", () => {
     expect(await nearMiss.text()).toBe(OUR_404);
   });
 });
+
+describe("HEAD requests (review round 8)", () => {
+  const send = (method: string, path: string) =>
+    exports.default.fetch(
+      new Request(new URL(path, ORIGIN), {
+        method,
+        headers: { origin: ORIGIN, "cf-connecting-ip": "192.0.2.252" },
+        redirect: "manual",
+      }),
+    );
+
+  it.each(["/api/auth/get-session", "/api/auth/update-user", "/api/auth/error?error=account_not_linked"])(
+    "answers HEAD %s with 404",
+    async (path) => {
+      expect((await send("HEAD", path)).status).toBe(404);
+    },
+  );
+
+  it("still serves GET on the listed routes (control)", async () => {
+    expect((await send("GET", "/api/auth/get-session")).status).toBe(200);
+    // With errorURL set, the library's error route redirects to the app's page.
+    expect((await send("GET", "/api/auth/error?error=account_not_linked")).status).toBe(302);
+  });
+});

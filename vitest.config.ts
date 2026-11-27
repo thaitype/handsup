@@ -50,6 +50,7 @@ export default defineConfig(async () => {
           "test/**/*.test.ts",
           "!test/**/*.short-ttl.test.ts",
           "!test/**/*.production.test.ts",
+          "!test/**/*.node-env-test.test.ts",
         ]),
         // Time limits set to seconds, so expiry tests wait in real time (spec 7.0).
         project("short-ttl", ["test/**/*.short-ttl.test.ts"], {
@@ -59,6 +60,8 @@ export default defineConfig(async () => {
         // Better Auth reads NODE_ENV once, when it is imported, so a production-like run
         // needs its own runtime instead of a changed env inside the default one (spec 7.0).
         project("production", ["test/**/*.production.test.ts"], { NODE_ENV: "production" }),
+        // The library's weakest defaults (origin check skipped, secret check skipped).
+        project("node-env-test", ["test/**/*.node-env-test.test.ts"], { NODE_ENV: "test" }),
       ],
     },
   };

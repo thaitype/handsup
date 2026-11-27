@@ -73,6 +73,22 @@ export function describeSpecOptions() {
       expect(build("x".repeat(32))).not.toThrow();
     });
 
+    it("refuses to start while BETTER_AUTH_SECRETS exists, as a binding or in process.env", async () => {
+      const replacement = "y".repeat(40);
+      // Control: without it, the secret in use is ours.
+      expect((await createAuth(env).$context).secret).toBe(env.BETTER_AUTH_SECRET);
+      expect(() => createAuth(withVars({ BETTER_AUTH_SECRETS: `1:${replacement}` }))).toThrow(
+        "BETTER_AUTH_SECRETS",
+      );
+      process.env.BETTER_AUTH_SECRETS = `1:${replacement}`;
+      try {
+        expect(() => createAuth(env)).toThrow("BETTER_AUTH_SECRETS");
+      } finally {
+        delete process.env.BETTER_AUTH_SECRETS;
+      }
+      expect((await createAuth(env).$context).secret).toBe(env.BETTER_AUTH_SECRET);
+    });
+
     it("uses a reset lifetime that is set", async () => {
       const context = await createAuth(withVars({ RESET_LINK_TTL_SECONDS: "120" })).$context;
       expect(context.options.emailAndPassword?.resetPasswordTokenExpiresIn).toBe(120);

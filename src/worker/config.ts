@@ -15,8 +15,17 @@ export function requireVar(env: Env, name: RequiredVar): string {
 
 const MIN_SECRET_LENGTH = 32;
 
-/** Spec 7.0: the library only rejects its default secret in production, so we check ourselves. */
+/**
+ * Spec 7.0: the library only rejects its default secret in production, so we check ourselves.
+ * Better Auth also reads BETTER_AUTH_SECRETS from the environment, and when that is present it
+ * replaces the secret we pass. On Workers bindings appear in process.env, so the app refuses
+ * to start while such a binding exists (review round 8).
+ */
 export function authSecret(env: Env): string {
+  const processEnv = (globalThis as { process?: { env?: Record<string, unknown> } }).process?.env;
+  if (env.BETTER_AUTH_SECRETS !== undefined || processEnv?.BETTER_AUTH_SECRETS !== undefined) {
+    throw new Error("BETTER_AUTH_SECRETS must not be set; use BETTER_AUTH_SECRET");
+  }
   const secret = requireVar(env, "BETTER_AUTH_SECRET");
   if (secret.length < MIN_SECRET_LENGTH) {
     throw new Error(`BETTER_AUTH_SECRET must be at least ${MIN_SECRET_LENGTH} characters`);
