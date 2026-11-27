@@ -36,9 +36,14 @@ async function enter(c: Context<AppEnv>, only?: Viewer["role"]) {
   return { viewer, session, identity, room, stub };
 }
 
-/** Counts a post against the user's limit, or answers 429. */
-async function limited(c: Context<AppEnv>, userId: string) {
-  const attempt = await takePostAttempt(c.env.DB, userId, Date.now());
+/**
+ * Counts a post against a learner's limit, or answers 429. Instructors are not limited:
+ * answering a class takes more than ten messages a minute. The role comes from
+ * INSTRUCTOR_EMAILS on the server, like every other role check.
+ */
+async function limited(c: Context<AppEnv>, viewer: Viewer) {
+  if (viewer.role === "instructor") return null;
+  const attempt = await takePostAttempt(c.env.DB, viewer.id, Date.now());
   if (attempt.allowed) return null;
   c.header("Retry-After", String(attempt.retryAfterSeconds));
   return errorResponse(c, 429, "rate_limited");
@@ -88,7 +93,7 @@ questions.post("/api/rooms/:id/questions", async (c) => {
   if (entry.refused) return entry.refused;
   const body = await readBody(c, askBody);
   if (!body) return errorResponse(c, 400, "invalid_request");
-  const refused = await limited(c, entry.viewer.id);
+  const refused = await limited(c, entry.viewer);
   if (refused) return refused;
   return respond(c, await entry.stub.ask(entry.identity, body));
 });
@@ -99,7 +104,7 @@ questions.post("/api/rooms/:id/questions/:qid/answers", async (c) => {
   if (entry.refused) return entry.refused;
   const body = await readBody(c, answerBody);
   if (!body) return errorResponse(c, 400, "invalid_request");
-  const refused = await limited(c, entry.viewer.id);
+  const refused = await limited(c, entry.viewer);
   if (refused) return refused;
   return respond(c, await entry.stub.answer(entry.identity, c.req.param("qid"), body));
 });

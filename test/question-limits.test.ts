@@ -25,7 +25,7 @@ describe("body length", () => {
 });
 
 describe("posting rate", () => {
-  it(`allows ${POST_LIMIT} posts a minute for each user, across rooms`, async () => {
+  it(`allows ${POST_LIMIT} posts a minute for each learner, across rooms`, async () => {
     const first = await classroom("One");
     const second = await classroom("Two");
     const a = await first.member("A");
@@ -47,17 +47,42 @@ describe("posting rate", () => {
     expect(bodies).not.toContain("one too many");
   });
 
-  it("counts answers as posts too", async () => {
+  it("counts a learner's thread messages as posts too", async () => {
     const { room, instructor, member } = await classroom();
     const api = roomApi(room.id);
     const a = await member("A");
     const asked = await questionFrom(await api.ask(a.browser, "q"));
     const statuses: number[] = [];
-    for (let i = 0; i <= POST_LIMIT; i++) statuses.push((await api.answer(instructor, asked.id, `a${i}`)).status);
-    expect(statuses).toEqual([...Array<number>(POST_LIMIT).fill(200), 429]);
+    // The question was the first post of this minute.
+    for (let i = 0; i < POST_LIMIT; i++) statuses.push((await api.answer(a.browser, asked.id, `m${i}`)).status);
+    expect(statuses).toEqual([...Array<number>(POST_LIMIT - 1).fill(200), 429]);
     // Resolving and deleting are not posts.
     expect((await api.resolve(instructor, asked.id)).status).toBe(200);
-    expect((await api.removeQuestion(instructor, asked.id)).status).toBe(200);
+    expect((await api.removeQuestion(a.browser, asked.id)).status).toBe(200);
+  });
+
+  it("does not limit instructors, whatever the client says about its role", async () => {
+    const { room, instructor, member } = await classroom();
+    const api = roomApi(room.id);
+    const a = await member("A");
+    const asked = await questionFrom(await api.ask(a.browser, "q"));
+    for (let i = 0; i < POST_LIMIT * 3; i++) {
+      expect((await api.answer(instructor, asked.id, `a${i}`)).status, `answer ${i}`).toBe(200);
+    }
+    const counted = await env.DB.prepare(
+      'select count(*) as n from post_attempt p join "user" u on u.id = p.user_id where u.email = ?',
+    )
+      .bind("teacher@example.test")
+      .first<{ n: number }>();
+    expect(counted!.n).toBe(0);
+    // A learner who claims a role in the request is still a learner.
+    for (let i = 0; i < POST_LIMIT - 1; i++) expect((await api.answer(a.browser, asked.id, `m${i}`)).status).toBe(200);
+    const claimed = await a.browser.request(`/api/rooms/${room.id}/questions/${asked.id}/answers`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-role": "instructor" },
+      body: JSON.stringify({ body: "over", clientRequestId: "claimed" }),
+    });
+    expect(claimed.status).toBe(429);
   });
 
   it("starts again in the next window", async () => {
