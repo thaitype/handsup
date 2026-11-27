@@ -431,3 +431,24 @@ Confirmed with a probe test (not committed): a link made while the target was a 
 ### Plan §3 checked against the app
 
 Edited in plan §3 to match the code at `127c74d`: open `http://localhost:5173` only (Origin check); README steps and `/api/version` in step 0; AC24 removed from steps 1 and 9 (cut); step 8 says an open room page keeps updates for up to 15 minutes after a reset (socket kill deferred) and adds the instructor refusal; step 11 names the "New code" button; step 12 gives the headed-script command and the one-time `playwright install chromium`.
+
+## Round 13: Mild's feedback round (2026-11-27)
+
+Mild's feedback: "1. ปุ่มลบคำถาม ไม่มี popup ยืนยันก่อนลบ 2. ผู้สอนตอบได้อย่างเดียว นักเรียน ไม่สามารถ พิมพ์ถามต่อในเรื่องเดิมได้ 3. ไม่มีปุ่ม toggle show resolved question". Decision on 2: "ขัอ 2 แบบ A ครับ" (asker and instructor only, one flat thread). The asker's follow-up reopening a resolved question: "เห็นด้วย".
+
+Director (Freya's session) verified `feat/v1` at `7b8d037` from a cold clone (`pnpm install --frozen-lockfile`, no `.dev.vars`, no Cloudflare login, e2e on port 5499; Mild's live server on 5173 untouched). Commits since `127c74d`: `9d39729` (retry id without `randomUUID`, not verified before), `2ba3255`, `d1960b4`, `7b8d037`.
+
+### Verdict: PASS
+
+- `pnpm gate` exit 0: typecheck, **209 tests** in 31 files, build, check:bundle, spikes 3, app e2e 18, slow e2e 6.
+- 13 of 13 breaks red, each reverted:
+  - Writing and deleting: another learner may follow up in someone else's public thread; anyone may delete anyone's message; a private question answers 403 instead of 404 on writing in its thread and on deleting from it.
+  - Asker-name rule: the asker's name on their follow-ups shown to everyone.
+  - Reopen: a retry with the same `clientRequestId` reopens; the retry check removed (also caught by the UNIQUE constraint, as a 500); instructor messages reopen; the asker's message does not reopen.
+  - Private-thread leak: `canSee` always true; HTTP snapshot unfiltered; WS events unfiltered; WS snapshot unfiltered. The leak canary has two new phases (asker follow-up, deleting it) and checks B's write into the private thread answers 404, with public-marker controls on every channel.
+- Run once, green: delete confirmation (cancelling deletes nothing) and the resolved switch within presenter mode (`e2e/app/room-controls.spec.ts`); follow-ups in the browser with the socket working and blocked (`e2e/app/follow-ups.spec.ts`).
+- `9d39729`: the retry id is 16 bytes from `crypto.getRandomValues` as hex (128 random bits, more than UUIDv4's 122), available outside secure contexts. Ids need only be unique per author (UNIQUE(`author_id`, `client_request_id`)); collision risk is negligible.
+
+### Spec text applied
+
+6.1 matrix (writing and deleting in the thread), 8.2 `AnswerView` and the thread rules, N5 rows (answers, resolved, post rate), AC9 phases, AC11 private-thread write, AC12 thread rows.

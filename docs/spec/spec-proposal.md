@@ -139,15 +139,15 @@
 | --- | --- | --- |
 | อายุ reset link | 24 ชม., ใช้ครั้งเดียว, สร้างใหม่แล้วลิงก์เก่าใช้ไม่ได้ | 1 ชม. (default ของ library) ปลอดภัยกว่าแต่หมดอายุก่อนผู้เรียนเปิด |
 | Sign-up | เปิดให้ทุกคน แต่ยังไม่เห็นอะไรจนกว่าจะ join | บังคับมี invite code ตอนสมัคร: กัน spam แต่ flow ยาวขึ้น |
-| จำนวน Answer | หลายคำตอบต่อ Question, ผู้สอนเท่านั้น | คำตอบเดียว: ง่ายกว่าแต่ต้องมี edit |
-| Resolved | ผู้สอน toggle ได้ทั้งเปิดและปิด, ตอบแล้วไม่ auto-resolve | auto-resolve: กดน้อยลง แต่ผิดเมื่อตอบเพื่อถามกลับ |
+| จำนวน Answer | thread หลายข้อความต่อ Question: ผู้สอนตอบ และผู้ถามถามต่อได้ (Mild "แบบ A") ผู้เรียนอื่นเขียนไม่ได้ | คำตอบเดียว: ง่ายกว่าแต่ต้องมี edit |
+| Resolved | ผู้สอน toggle ได้ทั้งเปิดและปิด, ตอบแล้วไม่ auto-resolve, ผู้ถามถามต่อแล้วกลับเป็นยังไม่ resolved (Mild "เห็นด้วย"), หน้าห้องมีสวิตช์ซ่อน/แสดงคำถามที่ resolved แล้ว (ใช้ร่วมกับ presenter mode ได้) และลบต้องยืนยันใน dialog ก่อน | auto-resolve: กดน้อยลง แต่ผิดเมื่อตอบเพื่อถามกลับ |
 | ลบ Question | เจ้าของลบได้แม้มีคำตอบแล้ว (คำตอบหายตาม), hard delete | ห้ามลบหลังตอบ หรือ soft delete: เก็บความรู้ไว้ได้ แต่ขัดกับ "ลบของตัวเอง" |
 | แก้ไขโพสต์ | ไม่มีใน v1 | เพิ่ม edit: ต้องมี event และ test เพิ่ม |
 | ชื่อผู้ใช้ | แก้ไม่ได้ใน v1 (Google ใช้ชื่อจาก profile) | แก้ได้: ต้อง update ชื่อใน DO ทุกห้อง |
 | ผู้สอนหลายคน | `INSTRUCTOR_EMAILS` คั่นด้วย comma, ทุกคนเห็นทุกห้อง | แยกเจ้าของห้อง: เพิ่มสิทธิ์ระดับห้อง |
 | ลบ/archive Room, เปลี่ยนชื่อห้อง | ไม่มีใน v1 | |
 | ความยาวข้อความ | 1 ถึง 4,000 ตัวอักษร, plain text, ไม่ render HTML/Markdown | Markdown: ต้อง sanitize |
-| อัตราการโพสต์ | 10 ครั้ง/นาที/user | ไม่จำกัด: ง่ายกว่า แต่คนเดียว flood ห้องได้ |
+| อัตราการโพสต์ | 10 ครั้ง/นาที/user นับคำถาม คำตอบ และการถามต่อรวมกัน (ผู้สอนก็นับ ดู deferral ใน plan §5) | ไม่จำกัด: ง่ายกว่า แต่คนเดียว flood ห้องได้ |
 | จำนวนต่อห้อง | สูงสุด 1,000 Question (snapshot เดียว) | pagination: ซับซ้อนขึ้นทั้ง protocol |
 
 **N6: Presenter mode ในหน้าผู้สอน** (default รอ Mild, อยู่ในขอบเขต v1)
@@ -260,9 +260,10 @@ Role **ไม่เก็บใน DB** คำนวณจาก env ทุก�
 | ถาม Question | ไม่ | ไม่ | ได้ | ได้ | ไม่ (draft ให้เฉพาะ learner) |
 | เห็น public Question + Answer + resolved | ไม่ | ไม่ | ได้ พร้อมชื่อ | ได้ | ได้ พร้อมชื่อ |
 | เห็น private Question + Answer + resolved | ไม่ | ไม่ | **ไม่** | ได้ | ได้ **พร้อมชื่อผู้ถาม** (DEC-1) |
-| ตอบ / mark resolved | ไม่ | ไม่ | ไม่ | ไม่ | ได้ |
+| เขียนใน thread ใต้คำถาม (ตอบ / ถามต่อ) | ไม่ | ไม่ | ไม่ (public: `403`, private: `404`) | ได้ (ถามต่อ) | ได้ (ตอบ) |
+| mark resolved | ไม่ | ไม่ | ไม่ | ไม่ | ได้ |
 | ลบ Question | ไม่ | ไม่ | ไม่ | ได้ | ได้ |
-| ลบ Answer | ไม่ | ไม่ | ไม่ | ไม่ | ได้ |
+| ลบข้อความใน thread | ไม่ | ไม่ | ไม่ | เฉพาะของตัวเอง | ได้ทุกข้อความ |
 | ค้น user / สร้าง reset link | ไม่ | ไม่ | ไม่ | ไม่ | ได้ (เป้าหมายต้องไม่ใช่ instructor) |
 | `GET /api/version` | ได้ | ได้ | ได้ | ได้ | ได้ |
 
@@ -417,7 +418,9 @@ Role ไม่เก็บใน attachment คำนวณจาก env ตอ�
 | S->C | `question.remove` | `questionId` |
 | C->S | `ping` | ส่งทุก 30 วินาที ตอบ `pong` ด้วย `setWebSocketAutoResponse` ไม่ปลุก DO ไม่ได้ `pong` ใน 10 วินาทีให้ถือว่า socket ตาย |
 
-`QuestionView = { id, visibility, body, authorName | null, isMine, createdAt, resolvedAt | null, answers: [{ id, authorName, body, createdAt }] }`
+`QuestionView = { id, visibility, body, authorName | null, isMine, createdAt, resolvedAt | null, answers: [{ id, authorName | null, fromInstructor, isMine, body, createdAt }] }`
+
+**Thread ใต้คำถาม (Mild 2026-11-27 "ขัอ 2 แบบ A ครับ"):** `answers` คือ thread แบนชั้นเดียวเรียงตามเวลา เขียนได้เฉพาะผู้สอน (ตอบ) และผู้ถามเจ้าของคำถาม (ถามต่อ) ผู้เรียนคนอื่นเขียนไม่ได้ (ไม่มีผู้เรียนตอบกันเอง ตาม Q4) ข้อความของผู้ถามใช้กฎชื่อเดียวกับตัวคำถาม: บนคำถามส่วนตัว `authorName` เป็นชื่อสำหรับผู้สอนเท่านั้น คนอื่น (รวมเจ้าของเอง) ได้ `null` กับ `isMine` ข้อความใน thread มองเห็นได้เท่ากับคำถาม จึงผ่าน `canSee`/`project` ตัวเดียวกัน ไม่มีตัวกรองแยก **การถามต่อของผู้ถามบนคำถามที่ resolved แล้วทำให้กลับเป็นยังไม่ resolved** (Mild: "เห็นด้วย") ข้อความของผู้สอนไม่ทำ retry ด้วย `clientRequestId` เดิมคืนผลเดิม ไม่สร้างซ้ำ และไม่ reopen คำถามที่ถูก resolve หลังการส่งครั้งแรก
 
 Message อื่นจาก client: ปิด socket
 
@@ -497,10 +500,10 @@ Input ตรวจด้วย schema และ reject field ที่ไม่�
 | AC6 | Instructor สร้าง Room ได้ code 10 ตัวตาม alphabet, learner สร้างไม่ได้ | Auto |
 | AC7 | Join ด้วย code และ direct link ได้ รวมกรณีต้อง login ก่อน, code หลัง rotate ใช้ไม่ได้ (code ใหม่ใช้ได้), คนไม่ join เปิด WS ไม่ได้ (สมาชิกเปิดได้) | Auto, Manual |
 | AC8 | โหมด WS: Question, Answer, resolved, delete ปรากฏบนทุกจอที่มีสิทธิ์ภายใน 2 วินาที (local) โดยไม่ refresh | Auto (browser หลาย context), Manual |
-| AC9 | **Leak canary**: B ต่อ socket **ก่อน** A โพสต์ A ถาม private ที่มี marker เฉพาะ เก็บทุก byte ที่ B ได้ (HTTP + WS) ตาม phase: ถาม, ตอบ, resolve, delete, reconnect, fresh connect, หลัง `evictDurableObject` หลังแต่ละ phase A โพสต์ **public marker ใหม่** และ test assert ว่า B ได้รับบน socket ที่กำลังตรวจภายใน timeout จากนั้นจึง assert ว่าไม่มี private marker, question id หรือ frame จากกิจกรรม private. A และผู้สอนต้องเห็น private marker ใน phase นั้น (phase delete: ได้ `question.remove`) . **ทางที่สองและสามในรอบเดียวกัน:** หลังแต่ละ phase B เรียก HTTP snapshot และคำตอบต้อง**มี public marker ของ phase นั้น** (control) โดยไม่มี private marker, question id หรือชื่อที่ผูกกับคำถามนั้น ขณะที่ snapshot ของ A และผู้สอนมี และ response ของ write ที่ B ส่งเองไม่มีข้อมูลนั้น phase ที่ snapshot ไม่มี public marker ถือว่า fail | Auto |
+| AC9 | **Leak canary**: B ต่อ socket **ก่อน** A โพสต์ A ถาม private ที่มี marker เฉพาะ เก็บทุก byte ที่ B ได้ (HTTP + WS) ตาม phase: ถาม, ตอบ, ผู้ถามถามต่อ, ลบข้อความถามต่อ, resolve, delete, reconnect, fresh connect, หลัง `evictDurableObject` หลังแต่ละ phase A โพสต์ **public marker ใหม่** และ test assert ว่า B ได้รับบน socket ที่กำลังตรวจภายใน timeout จากนั้นจึง assert ว่าไม่มี private marker, question id หรือ frame จากกิจกรรม private. A และผู้สอนต้องเห็น private marker ใน phase นั้น (phase delete: ได้ `question.remove`) . **ทางที่สองและสามในรอบเดียวกัน:** หลังแต่ละ phase B เรียก HTTP snapshot และคำตอบต้อง**มี public marker ของ phase นั้น** (control) โดยไม่มี private marker, question id หรือชื่อที่ผูกกับคำถามนั้น ขณะที่ snapshot ของ A และผู้สอนมี และ response ของ write ที่ B ส่งเองไม่มีข้อมูลนั้น phase ที่ snapshot ไม่มี public marker ถือว่า fail | Auto |
 | AC10 | ทั้ง frame WS และ HTTP snapshot: ผู้สอนได้ชื่อผู้ถามของ private Question ถูกคน (ไม่มี `authorId`), เจ้าของได้ `isMine` โดย `authorName` เป็น `null`, B ไม่ได้รับอะไรจากกิจกรรมนั้น (marker, ชื่อที่ผูกกับคำถาม, id) ขณะที่ได้ public marker บนช่องทางเดียวกัน | Auto |
-| AC11 | B ลบ/อ้าง id ของ private Question ได้ response เท่ากับ id ที่ไม่มีจริงแบบ byte (status, body, header ที่เกี่ยว ไม่นับ header เวลา/trace). Control ใน test เดียวกัน: เจ้าของลบ id นั้นสำเร็จ | Auto |
-| AC12 | ตาราง test จาก matrix 6.1: ทุกแถว action มีทั้งช่องที่อนุญาตและช่องที่ปฏิเสธ ยิง API ตรง รันในตารางเดียวกัน นับและรายงานจำนวนทั้งสองแบบ | Auto |
+| AC11 | B ลบ/อ้าง id ของ private Question ได้ response เท่ากับ id ที่ไม่มีจริงแบบ byte (status, body, header ที่เกี่ยว ไม่นับ header เวลา/trace). รวมถึง B เขียนใน thread ของ private Question นั้น (`404` เหมือน id ที่ไม่มี ไม่ใช่ `403`). Control ใน test เดียวกัน: เจ้าของลบ id นั้นสำเร็จ และเขียนใน thread ของตัวเองได้ | Auto |
+| AC12 | ตาราง test จาก matrix 6.1 (รวมแถวเขียนและลบใน thread): ทุกแถว action มีทั้งช่องที่อนุญาตและช่องที่ปฏิเสธ ยิง API ตรง รันในตารางเดียวกัน นับและรายงานจำนวนทั้งสองแบบ | Auto |
 | AC13 | หลุดแล้วต่อใหม่ state ตรงกับ DB รวมรายการที่ถูกลบระหว่างหลุด, retry ด้วย `clientRequestId` เดิมไม่สร้างซ้ำ (id ใหม่สร้างได้) ใช้เกณฑ์เดียวกันกับ HTTP snapshot | Auto |
 | AC14 | พิสูจน์ว่า eviction เกิดจริง (instance marker ใน memory เปลี่ยน อ่านด้วย `runInDurableObject`) และ socket เดิมรอดแบบ hibernate (`webSockets` option ค่า default) แล้วยังได้ event โดยกฎสิทธิ์ยังถูก | Auto |
 | AC15 | ลิงก์ที่ admin API คืนมาตั้งรหัสได้จริง, ใช้ครั้งเดียว, หมดอายุแล้วใช้ไม่ได้, ลิงก์เก่าตายเมื่อสร้างใหม่ (ลิงก์ใหม่ใช้ได้), session เดิมใช้ไม่ได้, socket ที่เคยได้ event ถูกปิด, สร้างให้ instructor ไม่ได้, `/request-password-reset` และ `GET /reset-password/:token` ได้ `404`, มี audit row. การหมดอายุ: ตั้ง `RESET_LINK_TTL_SECONDS` เป็นไม่กี่วินาทีแล้วรอจริง. Control: ภายใต้ config เดียวกัน ลิงก์ที่ใช้ก่อนหมดอายุสำเร็จ | Auto, Manual |
