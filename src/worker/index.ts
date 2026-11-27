@@ -1,6 +1,7 @@
 import { Hono, type Context } from "hono";
 import { createAuth } from "./auth.ts";
-import { roleOf } from "./role.ts";
+import { viewerOf, writeGate, type AppEnv } from "./http.ts";
+import { rooms } from "./rooms.ts";
 
 export { RoomDO } from "./room-do.ts";
 
@@ -23,7 +24,7 @@ export const AUTH_ROUTES: ReadonlySet<string> = new Set([
 
 const notFound = (c: Context) => c.json({ error: "not_found" }, 404);
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<AppEnv>();
 
 /** Statuses that carry no JSON body. Better Auth still labels its redirects as JSON. */
 const hasNoBody = (status: number) => status === 101 || status === 204 || (status >= 300 && status < 400);
@@ -36,17 +37,20 @@ app.use("/api/*", async (c, next) => {
   if (hasNoBody(c.res.status)) c.res.headers.delete("Content-Type");
 });
 
+app.use("/api/*", writeGate);
+
 app.all("/api/auth/*", (c) => {
   const route = `${c.req.method} ${new URL(c.req.url).pathname}`;
   return AUTH_ROUTES.has(route) ? createAuth(c.env).handler(c.req.raw) : notFound(c);
 });
 
 app.get("/api/me", async (c) => {
-  const session = await createAuth(c.env).api.getSession({ headers: c.req.raw.headers });
-  if (!session) return c.json({ error: "unauthenticated" }, 401);
-  const { id, name, email } = session.user;
-  return c.json({ id, name, email, role: roleOf(c.env, email) });
+  const viewer = await viewerOf(c);
+  if (!viewer) return c.json({ error: "unauthenticated" }, 401);
+  return c.json(viewer);
 });
+
+app.route("/", rooms);
 
 app.all("/api/*", notFound);
 

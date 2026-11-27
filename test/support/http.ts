@@ -14,19 +14,24 @@ export class Browser {
 
   constructor(private readonly send = (request: Request) => exports.default.fetch(request)) {}
 
-  async fetch(path: string, body?: unknown): Promise<Response> {
-    const headers = new Headers({ origin: ORIGIN, "cf-connecting-ip": this.#address });
+  fetch(path: string, body?: unknown): Promise<Response> {
+    return this.request(path, {
+      method: body === undefined ? "GET" : "POST",
+      headers: body === undefined ? {} : { "content-type": "application/json" },
+      body: body === undefined ? null : JSON.stringify(body),
+    });
+  }
+
+  /** Any request, sent with this browser's cookies, origin and address. */
+  async request(path: string, init: RequestInit): Promise<Response> {
+    const headers = new Headers(init.headers);
+    headers.set("origin", ORIGIN);
+    headers.set("cf-connecting-ip", this.#address);
     if (this.#cookies.size > 0) {
       headers.set("cookie", [...this.#cookies].map(([k, v]) => `${k}=${v}`).join("; "));
     }
-    if (body !== undefined) headers.set("content-type", "application/json");
     const response = await this.send(
-      new Request(new URL(path, ORIGIN), {
-        method: body === undefined ? "GET" : "POST",
-        headers,
-        body: body === undefined ? null : JSON.stringify(body),
-        redirect: "manual",
-      }),
+      new Request(new URL(path, ORIGIN), { ...init, headers, redirect: "manual" }),
     );
     for (const cookie of response.headers.getSetCookie()) {
       const [pair = ""] = cookie.split(";");
