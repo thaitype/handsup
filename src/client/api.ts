@@ -4,6 +4,13 @@ import type { RemoveResult, UpsertResult, Visibility } from "../shared/protocol.
 export type Me = { id: string; name: string; email: string; role: "instructor" | "learner" };
 export type RoomSummary = { id: string; name: string; createdAt: number; inviteCode?: string };
 
+export type AdminUser = {
+  id: string;
+  name: string;
+  email: string;
+  resetRefusal: "instructor_account" | "google_account" | null;
+};
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -38,6 +45,15 @@ const oneQuestion = (roomId: string, questionId: string) =>
   `${questions(roomId)}/${encodeURIComponent(questionId)}`;
 
 export const api = {
+  searchUsers: (query: string) =>
+    call<{ users: AdminUser[] }>(`/api/admin/users?q=${encodeURIComponent(query)}`).then((r) => r.users),
+  resetLink: (userId: string) =>
+    call<{ link: string; expiresInSeconds: number }>(
+      `/api/admin/users/${encodeURIComponent(userId)}/reset-link`,
+      {},
+    ),
+  resetPassword: (token: string, newPassword: string) =>
+    call("/api/auth/reset-password", { token, newPassword }),
   ask: (roomId: string, body: string, visibility: Visibility, clientRequestId: string) =>
     call<UpsertResult>(questions(roomId), { body, visibility, clientRequestId }),
   answer: (roomId: string, questionId: string, body: string, clientRequestId: string) =>

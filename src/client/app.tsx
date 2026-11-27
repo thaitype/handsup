@@ -2,7 +2,9 @@ import { Link, Navigate, Route, Routes, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { api } from "./api.ts";
 import { pendingJoin } from "./pending-join.ts";
+import { AdminPage } from "./pages/admin.tsx";
 import { AuthErrorPage } from "./pages/auth-error.tsx";
+import { ResetPage } from "./pages/reset.tsx";
 import { JoinPage } from "./pages/join.tsx";
 import { RoomPage } from "./pages/room.tsx";
 import { RoomsPage } from "./pages/rooms.tsx";
@@ -34,6 +36,11 @@ export function App() {
             <span data-testid="who">
               {me.name} ({me.role})
             </span>
+            {me.role === "instructor" && (
+              <Link to="/admin" className="underline underline-offset-4">
+                Reset passwords
+              </Link>
+            )}
             <Button variant="outline" size="sm" onClick={signOut}>
               Sign out
             </Button>
@@ -49,6 +56,8 @@ export function App() {
             <Route path="/sign-in" element={<SignInPage />} />
             <Route path="/sign-up" element={<SignUpPage />} />
             <Route path="/rooms/:id" element={<RoomPage />} />
+            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/reset" element={<ResetPage />} />
             <Route path="/join" element={<JoinPage />} />
             <Route path="/auth/error" element={<AuthErrorPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />

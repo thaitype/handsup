@@ -1,0 +1,6 @@
+# Spec 7.4: the page that holds a reset token tells the browser to send no referrer.
+# index.html carries the same policy as a meta tag, which also covers the dev server.
+/reset
+  Referrer-Policy: no-referrer
+/reset/
+  Referrer-Policy: no-referrer

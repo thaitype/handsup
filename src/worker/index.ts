@@ -1,4 +1,5 @@
 import { Hono, type Context } from "hono";
+import { admin } from "./admin.ts";
 import { createAuth } from "./auth.ts";
 import { viewerOf, writeGate, type AppEnv } from "./http.ts";
 import { questions } from "./questions.ts";
@@ -55,6 +56,7 @@ app.get("/api/me", async (c) => {
 
 app.route("/", rooms);
 app.route("/", questions);
+app.route("/", admin);
 
 app.all("/api/*", notFound);
 

@@ -32,6 +32,12 @@ const deployConfig = JSON.parse(read("wrangler.json"));
 const baked = Object.keys(deployConfig.vars ?? {});
 if (baked.length > 0) failures.push(`wrangler.json has baked vars: ${baked.join(", ")}`);
 
+// Spec 7.4: the built app sends no-referrer on the page that holds a reset token.
+const headerRules = readFileSync(join(root, "../client/_headers"), "utf8");
+if (!/^\/reset\n\s+Referrer-Policy: no-referrer$/m.test(headerRules)) {
+  failures.push("client/_headers has no Referrer-Policy: no-referrer rule for /reset");
+}
+
 console.log(`checked ${scripts.length} scripts, ${maps.length} source maps, ${sources.length} sources in ${root}`);
 if (failures.length > 0) {
   for (const failure of failures) console.error(`FAIL: ${failure}`);
