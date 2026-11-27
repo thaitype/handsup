@@ -62,7 +62,8 @@ function Composer({
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!body.trim()) return;
-    requestId.current ??= crypto.randomUUID();
+    // randomUUID needs a secure context; the dev server is also opened over plain http by hostname.
+    requestId.current ??= Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
     const id = requestId.current;
     if (await run(() => post(body, id))) {
       requestId.current = null;
