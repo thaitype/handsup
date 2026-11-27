@@ -27,7 +27,7 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "wrangler types --include-runtime true && tsc --noEmit",
+    "typecheck": "wrangler types --include-runtime true && tsc --noEmit && tsc --noEmit -p e2e",
     "test": "vitest run",
     "test:e2e:spikes": "playwright test",
     "check:bundle": "node scripts/check-bundle.mjs",
