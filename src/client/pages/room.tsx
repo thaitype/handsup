@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { BODY_MAX_CHARS, type QuestionView, type RemoveResult, type UpsertResult, type Visibility } from "../../shared/protocol.ts";
 import { api, ApiError } from "../api.ts";
 import type { RoomState } from "../room/connection.ts";
+import { usePresenterMode } from "../room/use-presenter.ts";
 import { useRoom } from "../room/use-room.ts";
 import { useSession } from "../session.tsx";
 
@@ -245,6 +246,7 @@ function ConnectionStatus({ status, updatedAt }: Pick<RoomState, "status" | "upd
 function Room({ roomId }: { roomId: string }) {
   const { me, refresh } = useSession();
   const { room, questions, status, updatedAt, ended, applyWrite } = useRoom(roomId);
+  const presenter = usePresenterMode();
   const isInstructor = me?.role === "instructor";
 
   // The server says this session is over: ask who is signed in, which leads to sign-in.
@@ -261,12 +263,19 @@ function Room({ roomId }: { roomId: string }) {
       </Alert>
     );
   }
+  // Presenter mode removes private questions from what is rendered, so they are not in the page.
+  const shown = isInstructor && presenter.isOn ? questions.filter((q) => q.visibility !== "private") : questions;
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold" data-testid="room-name">
           {room?.name ?? "Room"}
         </h1>
+        {isInstructor && (
+          <Button size="sm" variant={presenter.isOn ? "default" : "outline"} aria-pressed={presenter.isOn} onClick={presenter.toggle}>
+            Presenter mode
+          </Button>
+        )}
       </div>
       <ConnectionStatus status={status} updatedAt={updatedAt} />
       {!room ? (
@@ -274,9 +283,9 @@ function Room({ roomId }: { roomId: string }) {
       ) : (
         <>
           {!isInstructor && <Ask roomId={roomId} applyWrite={applyWrite} />}
-          {questions.length === 0 && <p className="text-muted-foreground">No questions yet.</p>}
+          {shown.length === 0 && <p className="text-muted-foreground">No questions yet.</p>}
           <ul className="grid gap-3" data-testid="questions">
-            {questions.map((question) => (
+            {shown.map((question) => (
               <Question
                 key={question.id}
                 roomId={roomId}

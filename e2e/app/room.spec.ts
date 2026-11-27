@@ -1,4 +1,4 @@
-/** The room page against the real app: AC8, AC16 (every tab) and safe retries. */
+/** The room page against the real app: AC8, AC16 (every tab), AC21 and safe retries. */
 import { expect, test } from "@playwright/test";
 import { classroom, PASSWORD, question, unique, watchSnapshots, watchSockets } from "../room-support.ts";
 
@@ -48,6 +48,7 @@ test("AC8: questions, answers, resolved and deletes reach every screen that may 
   // A learner has no instructor controls, and only the owner may delete.
   await expect(other.getByRole("button", { name: "Mark resolved" })).toHaveCount(0);
   await expect(other.getByLabel("Your answer")).toHaveCount(0);
+  await expect(other.getByRole("button", { name: "Presenter mode" })).toHaveCount(0);
   await question(asker, hidden).getByRole("button", { name: "Delete question" }).click();
   await expect(question(teacher, hidden)).toHaveCount(0, SOON);
 
@@ -57,6 +58,64 @@ test("AC8: questions, answers, resolved and deletes reach every screen that may 
   expect(sockets[2]!.frames.join()).toContain(open);
   expect(sockets[2]!.frames.join()).not.toContain(hidden);
   await expect(other.getByTestId("connection")).toHaveCount(0);
+  await room.close();
+});
+
+test("AC21: presenter mode keeps private questions and their askers out of the page", async ({ browser }) => {
+  const room = await classroom(browser);
+  const open = await room.learner("Public");
+  // Asks only privately, so their name has no other reason to be on the screen.
+  const shy = await room.learner("ShyAsker");
+  const shown = unique("public");
+  const hidden = unique("private");
+  await room.ask(open, shown);
+  await room.ask(shy, hidden, "private");
+
+  const page = room.instructor.page;
+  await page.goto(room.path);
+  await expect(question(page, hidden)).toBeVisible();
+  await expect(question(page, hidden).getByTestId("asker")).toHaveText(shy.name);
+  const second = await room.instructor.context.newPage();
+  await second.goto(room.path);
+  await expect(question(second, hidden)).toBeVisible();
+
+  const toggle = page.getByRole("button", { name: "Presenter mode" });
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  const absent = async (target: typeof page, text: string) => {
+    await expect(question(target, shown)).toBeVisible();
+    const html = await target.content();
+    expect(html).toContain(shown);
+    expect(html).not.toContain(text);
+    expect(html).not.toContain(shy.name);
+  };
+  await absent(page, hidden);
+  // The instructor's other tab follows.
+  await absent(second, hidden);
+
+  // One that arrives while the mode is on. The public one after it shows the page heard both.
+  const late = unique("private-late");
+  const after = unique("public-late");
+  await room.ask(shy, late, "private");
+  await room.ask(open, after);
+  await expect(question(page, after)).toBeVisible();
+  await absent(page, late);
+
+  await page.reload();
+  await expect(question(page, after)).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await absent(page, hidden);
+  await absent(page, late);
+
+  await toggle.click();
+  for (const text of [hidden, late]) await expect(question(page, text)).toBeVisible();
+  await expect(question(page, hidden).getByTestId("asker")).toHaveText(shy.name);
+  // Private looks different from public.
+  const style = (text: string) =>
+    question(page, text).evaluate((el) => [getComputedStyle(el).borderTopStyle, getComputedStyle(el).backgroundColor]);
+  expect(await style(hidden)).not.toEqual(await style(shown));
+  await expect(question(page, hidden)).toContainText("คำถามส่วนตัว");
+  await expect(question(page, shown)).not.toContainText("คำถามส่วนตัว");
   await room.close();
 });
 
