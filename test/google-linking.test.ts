@@ -18,6 +18,13 @@ const providers = async (email: string) => {
   return results.map((row) => row.providerId);
 };
 
+const emailVerified = async (email: string) =>
+  (
+    await env.DB.prepare('select emailVerified from "user" where email = ?')
+      .bind(email)
+      .first<{ emailVerified: number }>()
+  )?.emailVerified;
+
 describe.each([
   { who: "learner", email: () => uniqueEmail("link"), role: "learner" },
   { who: "instructor", email: () => "second.teacher@example.test", role: "instructor" },
@@ -33,6 +40,8 @@ describe.each([
   it("refuses Google for an existing password account", async () => {
     const email = makeEmail();
     expect((await new Browser().signUp(email)).status).toBe(200);
+    // The refusal rests on this (spec 7.2, N1): password sign-up never verifies the email.
+    expect(await emailVerified(email)).toBe(0);
 
     const browser = new Browser();
     const landing = await google.signIn(browser, email);

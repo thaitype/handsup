@@ -61,6 +61,7 @@ describe("instructor list", () => {
 
   it("treats an empty list as no instructors and a missing one as an error", () => {
     expect(roleOf(withList("teacher@example.test"), "teacher@example.test")).toBe("instructor");
+    expect(roleOf(withList("teacher@example.test"), " Teacher@Example.TEST ")).toBe("instructor");
     expect(roleOf(withList(""), "teacher@example.test")).toBe("learner");
     expect(() => roleOf(withList(undefined), "teacher@example.test")).toThrow("INSTRUCTOR_EMAILS");
   });
