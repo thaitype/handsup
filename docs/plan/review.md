@@ -460,3 +460,17 @@ Director (Freya's session) verified `feat/v1` at `7b8d037` from a cold clone (`p
 - Moved from plan §5 (before-deploy deferral) to plan §6 Known issues, README "Known issues", and the deploy guide.
 - Mitigation is procedural only: before adding an email to the list, no pending reset link for that user (wait 24 h, or the operator deletes the tokens; the D1 command is written down but has never been run).
 - The director's round 12 recommendation (re-check the role when the link is used, delete the token and refuse) stays available if Mild changes his mind.
+
+## Round 15: instructor learner list, PR branch `feat/instructor-learner-list` (2026-11-27)
+
+Follow-up request: an instructor-only, read-only list of every learner, with a room filter, search and pages (spec 7.7, AC31). Director re-ran the branch at `9dce9e7` from a cold clone in a `/home` work folder (`pnpm install --frozen-lockfile`, no `.dev.vars`, no Cloudflare action). Diff read against the v1 merge `5d05c82`: 12 files, +574 −11.
+
+### Verdict: PASS
+
+- `pnpm gate` exit 0: typecheck, unit **252 passed** (34 files), build, `check:bundle`, spikes 3, app 20, slow 6.
+- Breaks, each reverted, each red in `test/learners.test.ts`: learner role check off (refusal test red); guest let through (refusal test red); instructor exclusion removed from the query (5 tests red); room filter ignored (2 tests red); `%` and `_` no longer escaped in search (search test red).
+- **Authorization** is on the server: guest `401`, learner `403` before any input is parsed, with an instructor control in the same test, and no learner email or room name in the refused body.
+- **SQL:** every user value (`q`, `room`, page offset, the instructor list as one JSON value) is a bound parameter. The only interpolation is the page-size constant. Repeated or unknown parameters get `400`.
+- **Data minimisation:** each row is `id`, `name`, `email`, `createdAt`, `rooms` (room id and name), asserted by an exact-keys test. Nothing about questions or activity (spec 6.2), no hashes, no account or session data. The client uses `id` only as a list key.
+- **Instructor exclusion** follows the role rule (case-insensitive, inside the query, so totals and pages count learners only); a look-alike address stays a learner.
+- **Public repo hygiene:** the diff has no domain, real address, account or resource id, secret or local path; test addresses use `example.test`. The spec section quotes the request, as earlier sections do.

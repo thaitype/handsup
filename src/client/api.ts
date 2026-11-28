@@ -1,4 +1,5 @@
 /** Calls to the app's own API. Every write is JSON, which the server's write gate requires. */
+import type { LearnersPage } from "../shared/learners.ts";
 import type { RemoveResult, UpsertResult, Visibility } from "../shared/protocol.ts";
 
 export type Me = { id: string; name: string; email: string; role: "instructor" | "learner" };
@@ -45,6 +46,12 @@ const oneQuestion = (roomId: string, questionId: string) =>
   `${questions(roomId)}/${encodeURIComponent(questionId)}`;
 
 export const api = {
+  learners: ({ search, roomId, page }: { search: string; roomId: string; page: number }) => {
+    const query = new URLSearchParams({ page: String(page) });
+    if (search) query.set("q", search);
+    if (roomId) query.set("room", roomId);
+    return call<LearnersPage>(`/api/admin/learners?${query}`);
+  },
   searchUsers: (query: string) =>
     call<{ users: AdminUser[] }>(`/api/admin/users?q=${encodeURIComponent(query)}`).then((r) => r.users),
   resetLink: (userId: string) =>

@@ -6,6 +6,7 @@ import { AdminPage } from "./pages/admin.tsx";
 import { AuthErrorPage } from "./pages/auth-error.tsx";
 import { ResetPage } from "./pages/reset.tsx";
 import { JoinPage } from "./pages/join.tsx";
+import { LearnersPage } from "./pages/learners.tsx";
 import { RoomPage } from "./pages/room.tsx";
 import { RoomsPage } from "./pages/rooms.tsx";
 import { SignInPage, SignUpPage } from "./pages/sign-in.tsx";
@@ -27,19 +28,24 @@ export function App() {
 
   return (
     <div className="mx-auto flex min-h-svh max-w-2xl flex-col gap-6 px-4 py-6">
-      <header className="flex items-center justify-between">
+      <header className="flex flex-wrap items-center justify-between gap-2">
         <Link to="/" className="text-lg font-semibold">
           handsup
         </Link>
         {me && (
-          <div className="flex items-center gap-3 text-sm">
+          <div className="flex flex-wrap items-center gap-3 text-sm">
             <span data-testid="who">
               {me.name} ({me.role})
             </span>
             {me.role === "instructor" && (
-              <Link to="/admin" className="underline underline-offset-4">
-                Reset passwords
-              </Link>
+              <>
+                <Link to="/learners" className="underline underline-offset-4">
+                  Learners
+                </Link>
+                <Link to="/admin" className="underline underline-offset-4">
+                  Reset passwords
+                </Link>
+              </>
             )}
             <Button variant="outline" size="sm" onClick={signOut}>
               Sign out
@@ -57,6 +63,7 @@ export function App() {
             <Route path="/sign-up" element={<SignUpPage />} />
             <Route path="/rooms/:id" element={<RoomPage />} />
             <Route path="/admin" element={<AdminPage />} />
+            <Route path="/learners" element={<LearnersPage />} />
             <Route path="/reset" element={<ResetPage />} />
             <Route path="/join" element={<JoinPage />} />
             <Route path="/auth/error" element={<AuthErrorPage />} />

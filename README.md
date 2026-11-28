@@ -76,6 +76,12 @@ once, lasts 24 hours and replaces any earlier link. It is shown only once. Instr
 accounts that only use Google cannot get one. Setting a new password ends that account's sessions.
 A room page that is already open can keep receiving updates for up to 15 minutes afterwards.
 
+## Learners
+
+Instructors have a **Learners** page: every account that is not in `INSTRUCTOR_EMAILS`, with name,
+email, joined rooms and sign-up date, 25 to a page. Choose a room to see only its members, or
+search by name or email. It changes nothing.
+
 ## Checks
 
 ```sh

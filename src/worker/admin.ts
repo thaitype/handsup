@@ -1,11 +1,16 @@
-/** Spec 7.4: an instructor finds a user and hands them a link to set a new password. */
+/**
+ * The instructor's admin routes: spec 7.4, finding a user and handing them a link to set a new
+ * password, and spec 7.7, the list of learners.
+ */
 import { betterAuth } from "better-auth";
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { authOptions } from "./auth.ts";
 import { requireVar, resetLinkTtlSeconds } from "./config.ts";
 import { errorResponse, readBody, viewerOf, type AppEnv } from "./http.ts";
+import { listLearners } from "./learners.ts";
 import { roleOf } from "./role.ts";
+import { containsPattern } from "./search.ts";
 
 const SEARCH_LIMIT = 20;
 const searchQuery = z.string().trim().min(1).max(200);
@@ -45,19 +50,35 @@ admin.get("/api/admin/users", async (c) => {
   if (entry.refused) return entry.refused;
   const query = searchQuery.safeParse(c.req.query("q"));
   if (!query.success) return errorResponse(c, 400, "invalid_request");
-  // The text is matched as written: % and _ are not wildcards.
-  const pattern = `%${query.data.toLowerCase().replace(/[\\%_]/g, "\\$&")}%`;
   const { results } = await c.env.DB.prepare(
     `select ${USER_COLUMNS} from "user" u
      where lower(u.email) like ?1 escape '\\' or lower(u.name) like ?1 escape '\\'
      order by u.email limit ${SEARCH_LIMIT}`,
   )
-    .bind(pattern)
+    .bind(containsPattern(query.data))
     .all<UserRow>();
   // Nothing about what a user has asked is shown here (spec 6.2).
   return c.json({
     users: results.map((u) => ({ id: u.id, name: u.name, email: u.email, resetRefusal: refusal(c.env, u) })),
   });
+});
+
+/** Each parameter at most once, and no others. */
+const once = <T extends z.ZodType>(value: T) => z.tuple([value]).transform(([only]) => only as z.output<T>);
+const learnerQuery = z.strictObject({
+  q: once(z.string().trim().max(200)).optional(),
+  room: once(z.string().min(1).max(64)).optional(),
+  page: once(z.string().regex(/^[1-9][0-9]{0,5}$/)).optional(),
+});
+
+admin.get("/api/admin/learners", async (c) => {
+  const entry = await instructor(c);
+  if (entry.refused) return entry.refused;
+  const query = learnerQuery.safeParse(c.req.queries());
+  if (!query.success) return errorResponse(c, 400, "invalid_request");
+  const { q, room, page } = query.data;
+  const result = await listLearners(c.env, { search: q ?? "", roomId: room, page: Number(page ?? 1) });
+  return result ? c.json(result) : errorResponse(c, 404, "not_found");
 });
 
 admin.post("/api/admin/users/:id/reset-link", async (c) => {
